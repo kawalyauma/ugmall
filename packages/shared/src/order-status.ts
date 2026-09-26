@@ -37,9 +37,9 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
 export const ORDER_TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
   pending: ["awaiting_payment", "confirmed", "cancelled"],
   awaiting_payment: ["paid", "cancelled"],
-  paid: ["confirmed", "processing", "cancelled", "refunded"],
-  confirmed: ["processing", "ready_for_dispatch", "cancelled"],
-  processing: ["ready_for_dispatch", "cancelled"],
+  paid: ["confirmed", "processing", "ready_for_dispatch", "assigned_to_rider", "out_for_delivery", "cancelled", "refunded"],
+  confirmed: ["processing", "ready_for_dispatch", "assigned_to_rider", "out_for_delivery", "delivered", "cancelled"],
+  processing: ["ready_for_dispatch", "assigned_to_rider", "out_for_delivery", "cancelled"],
   ready_for_dispatch: ["assigned_to_rider", "out_for_delivery", "delivered", "cancelled"],
   assigned_to_rider: ["out_for_delivery", "ready_for_dispatch", "cancelled"],
   out_for_delivery: ["delivered", "returned", "ready_for_dispatch", "cancelled"],

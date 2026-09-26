@@ -470,7 +470,7 @@ export class OrderService {
       if (payment) {
         await tx
           .update(payments)
-          .set({ status: "succeeded", amount, completedAt: new Date(), collectedBy: staffId, failureReason: note ?? null })
+          .set({ status: "succeeded", amount, completedAt: new Date(), collectedBy: staffId, failureReason: null, raw: note ? { note } : null })
           .where(eq(payments.id, payment.id));
       } else {
         await tx.insert(payments).values({
@@ -482,6 +482,7 @@ export class OrderService {
           externalReference: newPaymentReference("CASH"),
           collectedBy: staffId,
           completedAt: new Date(),
+          raw: note ? { note } : null,
         });
       }
       const amountPaid = order.amountPaid + amount;

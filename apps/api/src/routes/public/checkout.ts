@@ -116,6 +116,18 @@ async function findTrackedOrder(c: Context<AppEnv>, orderNumber: string, token: 
   return order;
 }
 
+/** Find an order by number + phone (for customers who lost the tracking link). */
+trackingRoutes.post("/lookup", limit("order-lookup", 10, 600), async (c) => {
+  const input = await body(c, z.object({ orderNumber: z.string().min(5).max(40), phone: ugPhone }));
+  const { db } = c.get("container");
+  const [order] = await db
+    .select({ orderNumber: orders.orderNumber, trackingToken: orders.trackingToken })
+    .from(orders)
+    .where(and(eq(orders.orderNumber, input.orderNumber.trim().toUpperCase()), eq(orders.phone, normalizeUgPhone(input.phone)!)));
+  if (!order) throw new ApiError(404, "We couldn't find an order with that number and phone");
+  return c.json(order);
+});
+
 trackingRoutes.get("/:orderNumber", async (c) => {
   const { db } = c.get("container");
   const order = await findTrackedOrder(c, c.req.param("orderNumber"), c.req.query("t"));
