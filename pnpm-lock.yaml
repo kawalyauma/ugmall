@@ -66,6 +66,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@aws-sdk/client-s3':
+        specifier: ^3.1141.0
+        version: 3.1141.0
       '@hono/node-server':
         specifier: ^1.19.5
         version: 1.19.17(hono@4.13.9)
@@ -105,15 +108,24 @@ importers:
       drizzle-orm:
         specifier: ^0.45.0
         version: 0.45.3(postgres@3.4.9)
+      exceljs:
+        specifier: ^4.4.0
+        version: 4.4.0
       hono:
         specifier: ^4.10.0
         version: 4.13.9
       ioredis:
         specifier: ^5.8.0
         version: 5.11.1
+      pdfkit:
+        specifier: ^0.17.2
+        version: 0.17.2
       pino:
         specifier: ^10.0.0
         version: 10.3.1
+      postgres:
+        specifier: ^3.4.9
+        version: 3.4.9
       sharp:
         specifier: ^0.34.5
         version: 0.34.5

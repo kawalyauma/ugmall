@@ -1,0 +1,9 @@
+# /etc/cron.d/ugmall — copy with: sudo cp scripts/cron.example /etc/cron.d/ugmall
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# Nightly backup at 02:15 Kampala time (set the server timezone: timedatectl set-timezone Africa/Kampala)
+15 2 * * * root /opt/shop/app/scripts/backup.sh >> /opt/shop/logs/backup.log 2>&1
+# Extra database-only safety dump at lunchtime
+15 13 * * * root cd /opt/shop/app && docker compose exec -T postgres pg_dump -U shop -d shop -Fc > /opt/shop/backups/midday.dump 2>> /opt/shop/logs/backup.log
+# Renew Let's Encrypt certificates weekly (if you use Let's Encrypt)
+30 3 * * 1 root /opt/shop/app/scripts/issue-letsencrypt.sh >> /opt/shop/logs/certbot.log 2>&1

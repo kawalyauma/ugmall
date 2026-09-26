@@ -12,5 +12,7 @@ export default defineConfig({
   sourcemap: true,
   splitting: true,
   noExternal: [/^@ugmall\//],
+  // third-party packages stay in node_modules (native binaries, data files)
+  external: ["sharp", "pdfkit", "exceljs", "@aws-sdk/client-s3", "postgres", "drizzle-orm", "ioredis", "bullmq", "pino", "hono", "@hono/node-server", "zod"],
   banner: { js: "import { createRequire } from 'module'; const require = createRequire(import.meta.url);" },
 });

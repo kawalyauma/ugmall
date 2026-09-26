@@ -1,0 +1,126 @@
+# Production stack for a single self-hosted Ubuntu/Debian server.
+# Persistent data lives under ${SHOP_ROOT:-/opt/shop} on the host:
+#   postgres/  redis/  storage/  backups/  logs/
+name: ugmall
+
+x-app-env: &app-env
+  env_file: .env
+  restart: unless-stopped
+  init: true
+  logging:
+    driver: json-file
+    options: { max-size: "20m", max-file: "5" }
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    <<: *app-env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-shop}
+      POSTGRES_USER: ${POSTGRES_USER:-shop}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      TZ: Africa/Kampala
+    volumes:
+      - ${SHOP_ROOT:-/opt/shop}/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      retries: 10
+    shm_size: 256mb
+
+  redis:
+    image: redis:7-alpine
+    <<: *app-env
+    # AOF persistence so carts, sessions and queued jobs survive restarts
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction", "--requirepass", "${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}"]
+    volumes:
+      - ${SHOP_ROOT:-/opt/shop}/redis:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $${REDIS_PASSWORD} ping | grep PONG"]
+      interval: 10s
+      retries: 10
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+
+  api:
+    build: { context: ., dockerfile: docker/api.Dockerfile }
+    image: ugmall/api:latest
+    <<: *app-env
+    environment:
+      RUN_MIGRATIONS: "true"
+      SERVICE_NAME: api
+      DATABASE_URL: postgres://${POSTGRES_USER:-shop}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-shop}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      STORAGE_ROOT: /storage
+      USE_X_ACCEL: "true"
+      TRUST_PROXY: "true"
+    volumes:
+      - ${SHOP_ROOT:-/opt/shop}/storage:/storage
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  worker:
+    image: ugmall/api:latest
+    <<: *app-env
+    command: ["node", "dist/worker.js"]
+    environment:
+      SERVICE_NAME: worker
+      DATABASE_URL: postgres://${POSTGRES_USER:-shop}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-shop}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      STORAGE_ROOT: /storage
+    volumes:
+      - ${SHOP_ROOT:-/opt/shop}/storage:/storage
+    healthcheck: { disable: true }
+    depends_on:
+      api: { condition: service_healthy }
+
+  storefront:
+    build: { context: ., dockerfile: docker/next.Dockerfile, args: { APP: storefront } }
+    image: ugmall/storefront:latest
+    <<: *app-env
+    environment:
+      API_INTERNAL_URL: http://api:4000
+    depends_on: [api]
+
+  admin:
+    build: { context: ., dockerfile: docker/next.Dockerfile, args: { APP: admin } }
+    image: ugmall/admin:latest
+    <<: *app-env
+    environment:
+      API_INTERNAL_URL: http://api:4000
+    depends_on: [api]
+
+  nginx:
+    image: nginx:1.27-alpine
+    <<: *app-env
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SHOP_DOMAIN: ${SHOP_DOMAIN:?set SHOP_DOMAIN in .env}
+      ADMIN_DOMAIN: ${ADMIN_DOMAIN:?set ADMIN_DOMAIN in .env}
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/snippets.conf:/etc/nginx/snippets.conf:ro
+      - ./docker/nginx/proxy.conf:/etc/nginx/proxy.conf:ro
+      - ./docker/nginx/cloudflare-ips.conf:/etc/nginx/cloudflare-ips.conf:ro
+      - ./docker/nginx/templates:/etc/nginx/templates:ro
+      - ${SHOP_ROOT:-/opt/shop}/storage:/srv/storage:ro
+      - ${SHOP_ROOT:-/opt/shop}/certs:/etc/nginx/certs:ro
+      - ${SHOP_ROOT:-/opt/shop}/logs/nginx:/var/log/nginx
+      - ${SHOP_ROOT:-/opt/shop}/certbot:/var/www/certbot:ro
+    depends_on: [storefront, admin, api]
+
+  # Optional: S3-compatible object storage on this same server.
+  # Enable with: docker compose --profile minio up -d  and STORAGE_DRIVER=minio
+  minio:
+    image: minio/minio:latest
+    profiles: ["minio"]
+    <<: *app-env
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-change-me-please}
+    volumes:
+      - ${SHOP_ROOT:-/opt/shop}/minio:/data
