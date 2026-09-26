@@ -9,17 +9,36 @@ function CategoryChildren({ parentId, categories, depth = 0 }: { parentId: strin
   const children = categories.filter((category) => category.parentId === parentId);
   if (!children.length) return null;
   return (
-    <ul className={`${depth ? "mt-2" : "mt-4"} space-y-1.5 border-l border-gray-200 pl-4`}>
+    <ul className={`${depth ? "mt-1.5" : "mt-3"} space-y-1 border-l border-gray-200 pl-3`}>
       {children.map((category) => {
         const childCount = categories.filter((candidate) => candidate.parentId === category.id).length;
+        if (childCount > 0) {
+          return (
+            <li key={category.id}>
+              <details className="group/tree rounded-xl open:bg-gray-50">
+                <summary className="flex cursor-pointer list-none items-center gap-2 rounded-xl px-3 py-2.5 text-sm text-gray-700 transition hover:bg-brand-50 hover:text-brand-800 [&::-webkit-details-marker]:hidden">
+                  <span className="grid size-5 shrink-0 place-items-center rounded-md bg-gray-100 text-gray-500 transition group-open/tree:bg-brand-100 group-open/tree:text-brand-700">
+                    <ChevronRight className="size-3.5 transition group-open/tree:rotate-90" />
+                  </span>
+                  <span className="font-semibold">{category.name}</span>
+                  <span className="ml-auto rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-gray-500 shadow-sm ring-1 ring-gray-100">{childCount}</span>
+                </summary>
+                <div className="pb-2 pl-3 pr-2">
+                  <Link href={`/c/${category.slug}`} className="ml-3 inline-flex items-center gap-1 py-2 text-xs font-bold text-brand-700 hover:text-brand-900">
+                    Shop all {category.name} <ArrowRight className="size-3.5" />
+                  </Link>
+                  <CategoryChildren parentId={category.id} categories={categories} depth={depth + 1} />
+                </div>
+              </details>
+            </li>
+          );
+        }
         return (
           <li key={category.id}>
             <Link href={`/c/${category.slug}`} className="group flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm text-gray-700 transition hover:bg-brand-50 hover:text-brand-800">
-              <ChevronRight className="size-3.5 shrink-0 text-gray-300 transition group-hover:translate-x-0.5 group-hover:text-brand-600" />
+              <span className="grid size-5 shrink-0 place-items-center rounded-md bg-gray-50 text-gray-400 transition group-hover:bg-brand-100 group-hover:text-brand-700"><ChevronRight className="size-3.5 transition group-hover:translate-x-0.5" /></span>
               <span className="font-semibold">{category.name}</span>
-              {childCount > 0 && <span className="ml-auto rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-500">{childCount}</span>}
             </Link>
-            <CategoryChildren parentId={category.id} categories={categories} depth={depth + 1} />
           </li>
         );
       })}
