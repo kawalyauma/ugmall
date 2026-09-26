@@ -7,7 +7,7 @@ SHOP_ROOT="${SHOP_ROOT:-/opt/shop}"
 
 echo "==> Installing Docker, firewall and backup tools"
 apt-get update
-apt-get install -y ca-certificates curl gnupg ufw fail2ban rclone age unattended-upgrades
+apt-get install -y ca-certificates curl gnupg ufw fail2ban rsync rclone gpg unattended-upgrades
 if ! command -v docker >/dev/null; then
   curl -fsSL https://get.docker.com | sh
 fi

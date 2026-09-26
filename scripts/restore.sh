@@ -18,7 +18,8 @@ sleep 5
 docker compose exec -T postgres dropdb -U "${POSTGRES_USER:-shop}" --if-exists "${POSTGRES_DB:-shop}"
 docker compose exec -T postgres createdb -U "${POSTGRES_USER:-shop}" "${POSTGRES_DB:-shop}"
 docker compose exec -T postgres pg_restore -U "${POSTGRES_USER:-shop}" -d "${POSTGRES_DB:-shop}" --no-owner < "$SRC/database.dump"
-rsync -a --delete "$SRC/storage/" "$SHOP_ROOT/storage/"
+if command -v rsync >/dev/null; then rsync -a --delete "$SRC/storage/" "$SHOP_ROOT/storage/"; else find "${SHOP_ROOT:?}/storage" -mindepth 1 -delete && cp -a "$SRC/storage/." "$SHOP_ROOT/storage/"; fi
+# (contents are replaced in place — the folder itself is bind-mounted into running containers)
 chown -R 1000:1000 "$SHOP_ROOT/storage"
 docker compose up -d
 echo "Restore complete."

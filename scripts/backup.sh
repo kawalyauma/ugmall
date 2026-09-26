@@ -22,7 +22,10 @@ docker compose exec -T postgres pg_dump -U "${POSTGRES_USER:-shop}" -d "${POSTGR
 
 log "Snapshotting uploaded files"
 LAST="$(ls -1d "$DEST"/*/storage 2>/dev/null | grep -v "$STAMP" | tail -1 || true)"
-if [ -n "$LAST" ]; then
+if ! command -v rsync >/dev/null; then
+  echo "rsync not installed — doing a full copy (apt install rsync for incremental snapshots)"
+  cp -a "$SHOP_ROOT/storage" "$OUT/storage"
+elif [ -n "$LAST" ]; then
   rsync -a --delete --link-dest="$LAST" "$SHOP_ROOT/storage/" "$OUT/storage/"
 else
   rsync -a "$SHOP_ROOT/storage/" "$OUT/storage/"

@@ -2,7 +2,7 @@
 
 server {
   listen 80;
-  listen [::]:80;
+  # listen [::]:80;   # enable if the server has IPv6
   server_name ${SHOP_DOMAIN} www.${SHOP_DOMAIN} ${ADMIN_DOMAIN};
   location /.well-known/acme-challenge/ { root /var/www/certbot; }
   location / { return 301 https://$host$request_uri; }
@@ -10,7 +10,7 @@ server {
 
 server {
   listen 443 ssl;
-  listen [::]:443 ssl;
+  # listen [::]:443 ssl;   # enable if the server has IPv6
   http2 on;
   server_name www.${SHOP_DOMAIN};
   ssl_certificate /etc/nginx/certs/fullchain.pem;
@@ -21,7 +21,7 @@ server {
 # ---------------------------------------------------------------- storefront
 server {
   listen 443 ssl;
-  listen [::]:443 ssl;
+  # listen [::]:443 ssl;   # enable if the server has IPv6
   http2 on;
   server_name ${SHOP_DOMAIN};
   ssl_certificate /etc/nginx/certs/fullchain.pem;
@@ -41,7 +41,7 @@ server {
 # --------------------------------------------------------------------- admin
 server {
   listen 443 ssl;
-  listen [::]:443 ssl;
+  # listen [::]:443 ssl;   # enable if the server has IPv6
   http2 on;
   server_name ${ADMIN_DOMAIN};
   ssl_certificate /etc/nginx/certs/fullchain.pem;
