@@ -5,7 +5,7 @@ import { deliveries, orderItems, orderStatusHistory, orders, payments, staffUser
 import { CartError, OrderError } from "@ugmall/orders";
 import { DeliveryError } from "@ugmall/delivery";
 import { PaymentError } from "@ugmall/payments";
-import { checkoutSchema, DELIVERY_METHODS, normalizeUgPhone, ORDER_STATUS_LABELS, prettyUgPhone, ugPhone } from "@ugmall/shared";
+import { checkoutSchema, ORDERABLE_DELIVERY_METHODS, normalizeUgPhone, ORDER_STATUS_LABELS, prettyUgPhone, ugPhone } from "@ugmall/shared";
 import { ApiError, body, clientIp } from "../../lib/http";
 import { limit } from "../../middleware/security";
 import type { AppEnv } from "../../types";
@@ -27,7 +27,7 @@ export { mapDomainError };
 const quoteSchema = z.object({
   locationId: z.number().int().positive().optional().nullable(),
   deliveryZoneId: z.string().uuid().optional().nullable(),
-  deliveryMethod: z.enum(DELIVERY_METHODS),
+  deliveryMethod: z.enum(ORDERABLE_DELIVERY_METHODS),
   couponCode: z.string().max(40).optional().nullable(),
   phone: z.string().optional().nullable(),
 });
