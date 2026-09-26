@@ -100,6 +100,7 @@ checkoutRoutes.post(
         total: result.order.total,
         paymentMethod: result.order.paymentMethod,
         paymentMessage: result.paymentMessage,
+        paymentRedirectUrl: result.paymentRedirectUrl,
       });
     } catch (err) {
       c.get("container").env.NODE_ENV !== "test" && console.warn("[checkout] failed", clientIp(c), (err as Error).message);
@@ -173,7 +174,7 @@ trackingRoutes.get("/:orderNumber", async (c) => {
     canCancel: order.status === "pending" || order.status === "awaiting_payment",
     canReview: order.status === "delivered",
     latestPayment: latestPayment
-      ? { status: latestPayment.status, failureReason: latestPayment.failureReason, msisdn: latestPayment.msisdn ? prettyUgPhone(latestPayment.msisdn) : null }
+      ? { provider: latestPayment.provider, status: latestPayment.status, failureReason: latestPayment.failureReason, msisdn: latestPayment.msisdn ? prettyUgPhone(latestPayment.msisdn) : null }
       : null,
     items: items.map((i) => ({
       id: i.id,
@@ -214,7 +215,7 @@ trackingRoutes.post("/:orderNumber/retry-payment", limit("retry-payment", 5, 600
   const order = await findTrackedOrder(c, c.req.param("orderNumber"), input.t);
   try {
     const r = await c.get("container").orders.retryPayment(order.id, input.msisdn);
-    return c.json({ ok: r.status !== "failed", message: r.customerMessage ?? r.failureReason });
+    return c.json({ ok: r.status !== "failed", message: r.customerMessage ?? r.failureReason, redirectUrl: r.redirectUrl });
   } catch (err) {
     mapDomainError(err);
   }

@@ -112,7 +112,9 @@ export default function CheckoutPage() {
   const orderTotal = quote?.total ?? cart.subtotal;
   const codLimit = settings.codMaxOrderTotal ?? 0;
   const codOk = codAllowed(orderTotal, codLimit);
-  const paymentOptions = (settings.paymentMethods as PaymentMethod[]).filter((m): m is OrderablePayment => m !== "pay_on_pickup");
+  const paymentOptions = (settings.paymentMethods as PaymentMethod[])
+    .filter((m): m is OrderablePayment => m !== "pay_on_pickup")
+    .sort((a, b) => (a === "card" ? -1 : b === "card" ? 1 : 0));
   const usablePayments = paymentOptions.filter((m) => m !== "cash_on_delivery" || codOk);
   useEffect(() => {
     if (usablePayments.length && !usablePayments.includes(f.paymentMethod)) set("paymentMethod", usablePayments[0]!);
@@ -157,7 +159,7 @@ export default function CheckoutPage() {
     try {
       const { couponCode, notes, ...toSave } = f;
       localStorage.setItem(SAVED_KEY, JSON.stringify({ ...toSave, paymentPhone: "" }));
-      const r = await api<{ orderNumber: string; trackingToken: string }>("/store/checkout/place", {
+      const r = await api<{ orderNumber: string; trackingToken: string; paymentRedirectUrl?: string }>("/store/checkout/place", {
         body: {
           ...f,
           reservationId: hold?.id,
@@ -168,6 +170,10 @@ export default function CheckoutPage() {
         },
       });
       await refreshCart();
+      if (r.paymentRedirectUrl) {
+        window.location.assign(r.paymentRedirectUrl);
+        return;
+      }
       router.push(`/orders/${r.orderNumber}?t=${r.trackingToken}&new=1`);
     } catch (e) {
       toast((e as Error).message);
@@ -282,7 +288,7 @@ export default function CheckoutPage() {
               <label key={m} className={cn("flex items-center gap-3 rounded-xl border p-3", disabled ? "cursor-not-allowed border-gray-200 bg-gray-50 text-gray-400" : "cursor-pointer", f.paymentMethod === m ? "border-brand-700 bg-brand-50" : !disabled && "border-gray-300")}>
                 <input type="radio" name="pm" disabled={disabled} checked={f.paymentMethod === m} onChange={() => set("paymentMethod", m)} className="accent-brand-700" />
                 <span className="font-medium">
-                  {PAYMENT_METHOD_LABELS[m]}
+                  {m === "card" ? "PesaPal — Mobile Money or Card" : PAYMENT_METHOD_LABELS[m]}
                   {m === "cash_on_delivery" && codLimit > 0 && (
                     <span className={cn("block text-xs font-normal", disabled ? "text-amber-700" : "text-gray-500")}>
                       {disabled ? `Not available for orders above ${formatUGX(codLimit)} — pay with Mobile Money` : `For orders up to ${formatUGX(codLimit)}`}
@@ -291,6 +297,7 @@ export default function CheckoutPage() {
                 </span>
                 {m === "mtn_momo" && <span className="ml-auto rounded bg-yellow-300 px-2 text-xs font-bold text-black">MTN</span>}
                 {m === "airtel_money" && <span className="ml-auto rounded bg-red-600 px-2 text-xs font-bold text-white">airtel</span>}
+                {m === "card" && <span className="ml-auto rounded bg-brand-700 px-2 py-0.5 text-xs font-bold text-white">PesaPal</span>}
               </label>
               );
             })}

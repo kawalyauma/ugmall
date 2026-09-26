@@ -44,6 +44,8 @@ export interface VerifyPaymentResult {
 export interface RefundRequest {
   externalReference: string; // new unique reference for the refund
   originalExternalReference: string;
+  originalProviderReference?: string;
+  originalFinancialTransactionId?: string;
   amount: number;
   msisdn?: string;
   customerName?: string;
@@ -80,7 +82,7 @@ export interface PaymentProvider {
   /** Offline providers (COD, pickup) are settled manually by staff/riders. */
   readonly offline: boolean;
   initiatePayment(req: InitiatePaymentRequest): Promise<InitiatePaymentResult>;
-  verifyPayment(externalReference: string): Promise<VerifyPaymentResult>;
+  verifyPayment(externalReference: string, providerReference?: string): Promise<VerifyPaymentResult>;
   refundPayment(req: RefundRequest): Promise<RefundResult>;
   handleWebhook(req: WebhookRequest): Promise<WebhookResult>;
 }

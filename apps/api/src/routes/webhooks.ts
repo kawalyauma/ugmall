@@ -49,6 +49,15 @@ webhookRoutes.on(["POST", "GET"], "/payments/:provider", async (c) => {
     } else if (result.verified.status !== "pending") {
       await orders.applyPaymentResult(result.externalReference, result.verified);
     }
+    if (providerId === "pesapal") {
+      const payload = parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+      return c.json({
+        orderNotificationType: payload.OrderNotificationType ?? payload.orderNotificationType ?? c.req.query("OrderNotificationType") ?? "IPNCHANGE",
+        orderTrackingId: payload.OrderTrackingId ?? payload.orderTrackingId ?? c.req.query("OrderTrackingId"),
+        orderMerchantReference: payload.OrderMerchantReference ?? payload.orderMerchantReference ?? c.req.query("OrderMerchantReference"),
+        status: 200,
+      });
+    }
     return c.json({ ok: true });
   } catch (err) {
     if (err instanceof PaymentError && err.code === "BAD_SIGNATURE") {

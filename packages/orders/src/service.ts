@@ -340,14 +340,17 @@ export class OrderService {
     await this.reservations.release(reservation.id).catch(() => {});
 
     let paymentMessage: string | undefined;
+    let paymentRedirectUrl: string | undefined;
     if (prepaid) {
-      paymentMessage = (await this.startPayment(order, payment)).customerMessage;
+      const result = await this.startPayment(order, payment);
+      paymentMessage = result.customerMessage;
+      paymentRedirectUrl = result.redirectUrl;
       await this.effects.scheduleOrderExpiry(order.id, this.config.paymentTimeoutMinutes * 60_000 + 5_000);
     } else {
       paymentMessage = (await provider.initiatePayment(this.paymentRequest(order, payment))).customerMessage;
     }
     await this.effects.notify("order_received", order.id);
-    return { order, payment, paymentMessage, trackingUrl: this.trackingUrl(order) };
+    return { order, payment, paymentMessage, paymentRedirectUrl, trackingUrl: this.trackingUrl(order) };
   }
 
   /** Cash on Delivery ceiling from Settings (key codMaxOrderTotal); 0 = no limit. */
@@ -435,7 +438,7 @@ export class OrderService {
     if (!payment || payment.status !== "pending") return true;
     const provider = this.paymentsRegistry.byProviderId(payment.provider);
     if (provider.offline) return true;
-    const result = await provider.verifyPayment(payment.externalReference);
+    const result = await provider.verifyPayment(payment.externalReference, payment.providerReference ?? undefined);
     await this.db.update(payments).set({ lastCheckedAt: new Date() }).where(eq(payments.id, paymentId));
     await this.db.insert(paymentEvents).values({ paymentId, provider: provider.id, kind: "status_check", payload: (result.raw ?? result) as object });
     if (result.status === "pending") return false;
@@ -783,6 +786,8 @@ export class OrderService {
       const res = await provider.refundPayment({
         externalReference: ref,
         originalExternalReference: payment.externalReference,
+        originalProviderReference: payment.providerReference ?? undefined,
+        originalFinancialTransactionId: payment.financialTransactionId ?? undefined,
         amount: opts.amount,
         msisdn: refund!.msisdn ?? undefined,
         customerName: order.customerName,

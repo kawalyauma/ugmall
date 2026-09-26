@@ -68,7 +68,7 @@ export default function SettingsPage() {
                 { header: "Wallet balance", cell: (p) => (p.balance?.amount !== undefined ? money(p.balance.amount) : p.balance?.error ? <span className="text-xs text-red-600">{p.balance.error}</span> : "—") },
               ]}
             />
-            <p className="mt-2 text-xs text-gray-500">Credentials are configured in the server environment file (SSENTEZO_USERNAME, SSENTEZO_PASSWORD, SSENTEZO_ENV).</p>
+            <p className="mt-2 text-xs text-gray-500">Credentials are configured in the server environment file. PesaPal uses PESAPAL_CONSUMER_KEY, PESAPAL_CONSUMER_SECRET, PESAPAL_IPN_ID and PESAPAL_ENV.</p>
           </Card>
           <Card title="Storage (on this server)">
             <p className="mb-2 text-sm text-gray-600">Driver: <b>{storage?.driver}</b> {storage?.root && <>· root <code>{storage.root}</code></>}</p>

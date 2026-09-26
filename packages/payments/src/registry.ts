@@ -2,6 +2,7 @@ import type { PaymentMethod } from "@ugmall/shared";
 import { FakeMobileMoneyProvider } from "./fake";
 import { CashOnDeliveryProvider, PayOnPickupProvider } from "./offline";
 import { SsentezoWalletProvider } from "./ssentezo";
+import { PesaPalProvider } from "./pesapal";
 import { PaymentError, type PaymentProvider } from "./types";
 
 /**
@@ -65,6 +66,22 @@ export function createPaymentRegistryFromEnv(env: NodeJS.ProcessEnv = process.en
       );
     } else if (env.NODE_ENV === "production") {
       console.warn("[payments] SSENTEZO_USERNAME/PASSWORD not set — mobile money is disabled");
+    }
+  }
+  if (mobile === "pesapal") {
+    if (env.PESAPAL_CONSUMER_KEY && env.PESAPAL_CONSUMER_SECRET && env.PESAPAL_IPN_ID) {
+      const pesapal = new PesaPalProvider({
+        consumerKey: env.PESAPAL_CONSUMER_KEY,
+        consumerSecret: env.PESAPAL_CONSUMER_SECRET,
+        notificationId: env.PESAPAL_IPN_ID,
+        environment: env.PESAPAL_ENV === "live" ? "live" : "sandbox",
+        baseUrl: env.PESAPAL_BASE_URL || undefined,
+      });
+      // PesaPal presents Mobile Money and card choices together on its hosted
+      // checkout, so expose one clear customer-facing option instead of three.
+      registry.register(pesapal, ["card"]);
+    } else if (env.NODE_ENV === "production") {
+      console.warn("[payments] PESAPAL_CONSUMER_KEY/SECRET/IPN_ID not set — online payment is disabled");
     }
   }
   if (mobile === "fake" || (env.PAYMENTS_FAKE === "true" && !registry.enabledMethods().includes("mtn_momo"))) {
