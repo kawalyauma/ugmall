@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Clock3, MessageCircle, ShieldCheck, Smartphone, Sparkles, Truck } from "lucide-react";
+import { ArrowRight, Cpu, MessageCircle, ShieldCheck, Shirt, Smartphone, Truck } from "lucide-react";
 import { serverGet } from "@/lib/api";
 import type { Category, ProductCard, ShopSettings } from "@/lib/types";
 import { ProductGrid } from "@/components/product-card";
@@ -23,45 +23,46 @@ export default async function Home() {
     serverGet<{ items: ProductCard[] }>("/store/products?sort=newest&limit=8"),
     serverGet<Offer[]>("/store/offers").catch(() => []),
   ]);
-  const top = categories.filter((c) => !c.parentId);
-  const categoryStyles = [
-    "from-teal-50 to-emerald-100 text-teal-900",
-    "from-amber-50 to-orange-100 text-amber-950",
-    "from-sky-50 to-cyan-100 text-sky-950",
-    "from-rose-50 to-pink-100 text-rose-950",
-  ];
+  const bySlug = (slug: string) => categories.find((c) => c.slug === slug);
+  const fashion = bySlug("fashion");
+  const fashionLinks = fashion ? categories.filter((c) => c.parentId === fashion.id).slice(0, 3) : [];
+  const phoneLinks = ["chargers-adapters", "cables", "cases", "earphones-headsets", "screen-protectors"]
+    .map(bySlug)
+    .filter((c): c is Category => Boolean(c));
+  const techLinks = ["gadgets", "mice", "bluetooth-network-adapters"].map(bySlug).filter((c): c is Category => Boolean(c));
   return (
     <>
-      <section className="relative overflow-hidden bg-gradient-to-br from-brand-800 via-brand-700 to-emerald-500 text-white">
-        <div className="absolute -right-20 -top-32 size-80 rounded-full bg-white/10 blur-3xl" />
-        <div className="absolute -bottom-28 left-1/3 size-72 rounded-full bg-amber-300/20 blur-3xl" />
-        <div className="container-page relative grid gap-8 py-12 md:grid-cols-[1.4fr_0.6fr] md:items-center md:py-20">
-          <div>
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-50 backdrop-blur">
-              <Sparkles className="size-3.5" /> Style, value, delivered
+      <section className="container-page pt-8 md:pt-10">
+        <div className="mb-5 flex items-end justify-between gap-4">
+          <div><div className="text-xs font-bold uppercase tracking-[0.18em] text-brand-600">Shop your way</div><h1 className="mt-1 text-3xl font-black tracking-tight md:text-4xl">Explore our departments</h1></div>
+          <Link href="/categories" className="hidden items-center gap-1 text-sm font-semibold text-brand-700 sm:inline-flex">See everything <ArrowRight className="size-4" /></Link>
+        </div>
+        <div className="grid gap-3 md:grid-cols-3">
+          <article className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-rose-100 via-pink-50 to-white p-5 shadow-sm ring-1 ring-rose-200/70">
+            <div className="absolute -right-8 -top-8 size-32 rounded-full bg-rose-200/50" />
+            <div className="relative"><div className="grid size-11 place-items-center rounded-2xl bg-white text-rose-700 shadow-sm"><Shirt className="size-5" /></div><h2 className="mt-6 text-2xl font-black text-rose-950">Fashion</h2><p className="mt-1 text-sm text-rose-900/65">Fresh looks for women, men and kids.</p>
+              <div className="mt-5 flex flex-wrap gap-2">{fashionLinks.map((c) => <Link key={c.id} href={`/c/${c.slug}`} className="rounded-full bg-white/85 px-3 py-1.5 text-xs font-bold text-rose-900 shadow-sm">{c.name}</Link>)}</div>
+              <Link href={fashion ? `/c/${fashion.slug}` : "/categories"} className="mt-5 inline-flex items-center gap-1 text-sm font-bold text-rose-800">Shop fashion <ArrowRight className="size-4" /></Link>
             </div>
-            <h1 className="max-w-2xl text-4xl font-black leading-[1.05] tracking-tight md:text-6xl">{settings.heroTitle}</h1>
-            <p className="mt-4 max-w-xl text-base leading-7 text-emerald-50 md:text-lg">{settings.heroSubtitle}</p>
-            <div className="mt-7 flex flex-wrap gap-3">
-              <Link href="/categories" className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-bold text-brand-800 shadow-lg shadow-emerald-950/15 transition hover:-translate-y-0.5">
-                Browse collections <ArrowRight className="size-4" />
-              </Link>
-              <a href={`https://wa.me/${settings.whatsappNumber}?text=${encodeURIComponent("Hello, I'd like to place an order")}`} className="inline-flex items-center gap-2 rounded-xl bg-whatsapp px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-950/15 transition hover:-translate-y-0.5 hover:brightness-105" target="_blank" rel="noreferrer">
-                <MessageCircle className="size-4" /> Chat on WhatsApp
-              </a>
+          </article>
+          <article className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-sky-100 via-cyan-50 to-white p-5 shadow-sm ring-1 ring-sky-200/70">
+            <div className="absolute -right-8 -top-8 size-32 rounded-full bg-sky-200/60" />
+            <div className="relative"><div className="grid size-11 place-items-center rounded-2xl bg-white text-sky-700 shadow-sm"><Smartphone className="size-5" /></div><h2 className="mt-6 text-2xl font-black text-sky-950">Phone accessories</h2><p className="mt-1 text-sm text-sky-900/65">Power, protect and connect your devices.</p>
+              <div className="mt-5 flex flex-wrap gap-2">{phoneLinks.slice(0, 4).map((c) => <Link key={c.id} href={`/c/${c.slug}`} className="rounded-full bg-white/85 px-3 py-1.5 text-xs font-bold text-sky-900 shadow-sm">{c.name}</Link>)}</div>
+              <Link href="/categories" className="mt-5 inline-flex items-center gap-1 text-sm font-bold text-sky-800">Explore accessories <ArrowRight className="size-4" /></Link>
             </div>
-          </div>
-          <div className="hidden rounded-3xl border border-white/20 bg-white/10 p-5 shadow-2xl backdrop-blur md:block">
-            <div className="flex items-center gap-3">
-              <div className="grid size-11 place-items-center rounded-2xl bg-white text-brand-700"><Clock3 className="size-5" /></div>
-              <div><div className="text-xs uppercase tracking-widest text-emerald-100">Delivery promise</div><div className="font-bold">Delivered within 48 hours</div></div>
+          </article>
+          <article className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-100 via-orange-50 to-white p-5 shadow-sm ring-1 ring-amber-200/70">
+            <div className="absolute -right-8 -top-8 size-32 rounded-full bg-amber-200/60" />
+            <div className="relative"><div className="grid size-11 place-items-center rounded-2xl bg-white text-amber-700 shadow-sm"><Cpu className="size-5" /></div><h2 className="mt-6 text-2xl font-black text-amber-950">Gadgets &amp; tech</h2><p className="mt-1 text-sm text-amber-900/65">Useful tech for work, home and travel.</p>
+              <div className="mt-5 flex flex-wrap gap-2">{techLinks.map((c) => <Link key={c.id} href={`/c/${c.slug}`} className="rounded-full bg-white/85 px-3 py-1.5 text-xs font-bold text-amber-900 shadow-sm">{c.name}</Link>)}</div>
+              <Link href={bySlug("gadgets") ? "/c/gadgets" : "/categories"} className="mt-5 inline-flex items-center gap-1 text-sm font-bold text-amber-800">Shop gadgets <ArrowRight className="size-4" /></Link>
             </div>
-            <div className="mt-5 border-t border-white/15 pt-4 text-sm leading-6 text-emerald-50">Shop online or message us directly. We keep every order simple, secure and easy to track.</div>
-          </div>
+          </article>
         </div>
       </section>
 
-      <section className="container-page -mt-5 grid grid-cols-2 gap-2 md:grid-cols-4">
+      <section className="container-page mt-5 grid grid-cols-2 gap-2 md:grid-cols-4">
         {[
           { icon: Smartphone, t: "Mobile Money", d: "MTN & Airtel" },
           { icon: Truck, t: "48-hour delivery", d: "Across our service areas" },
@@ -77,25 +78,6 @@ export default async function Home() {
           </div>
         ))}
       </section>
-
-      {top.length > 0 && <section className="container-page mt-10">
-        <div className="mb-4 flex items-end justify-between">
-          <div><div className="text-xs font-bold uppercase tracking-[0.18em] text-brand-600">Find your style</div><h2 className="mt-1 text-2xl font-black tracking-tight">Browse by category</h2></div>
-          <Link href="/categories" className="inline-flex items-center gap-1 text-sm font-semibold text-brand-700">View all <ArrowRight className="size-4" /></Link>
-        </div>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          {top.slice(0, 8).map((c, index) => (
-            <Link key={c.id} href={`/c/${c.slug}`} className={`group relative min-h-36 overflow-hidden rounded-3xl bg-gradient-to-br p-4 shadow-sm ring-1 ring-black/5 transition hover:-translate-y-1 hover:shadow-xl ${categoryStyles[index % categoryStyles.length]}`}>
-              {c.image && <img src={c.image} alt="" className="absolute inset-0 size-full object-cover opacity-25 transition duration-500 group-hover:scale-105" />}
-              <div className="absolute -bottom-8 -right-8 size-28 rounded-full bg-white/40" />
-              <div className="relative flex h-full flex-col justify-between">
-                <span className="grid size-11 place-items-center rounded-2xl bg-white/75 text-xl font-black shadow-sm">{c.name[0]}</span>
-                <div className="flex items-end justify-between gap-2"><span className="text-lg font-black">{c.name}</span><span className="grid size-8 place-items-center rounded-full bg-white/80 transition group-hover:translate-x-0.5"><ArrowRight className="size-4" /></span></div>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </section>}
 
       {offers.length > 0 && (
         <section className="container-page mt-6 grid gap-3 md:grid-cols-2">
