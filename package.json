@@ -1,0 +1,31 @@
+{
+  "name": "ugmall",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter ./apps/* dev",
+    "dev:api": "pnpm --filter @ugmall/api dev",
+    "dev:worker": "pnpm --filter @ugmall/api dev:worker",
+    "dev:storefront": "pnpm --filter @ugmall/storefront dev",
+    "dev:admin": "pnpm --filter @ugmall/admin dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "vitest run",
+    "db:generate": "pnpm --filter @ugmall/database generate",
+    "db:migrate": "pnpm --filter @ugmall/database migrate",
+    "db:seed": "pnpm --filter @ugmall/database seed"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["sharp", "esbuild", "@tailwindcss/oxide", "unrs-resolver"]
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "@ugmall/orders",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@ugmall/shared": "workspace:*",
+    "@ugmall/database": "workspace:*",
+    "@ugmall/inventory": "workspace:*",
+    "@ugmall/delivery": "workspace:*",
+    "@ugmall/payments": "workspace:*",
+    "@ugmall/notifications": "workspace:*",
+    "drizzle-orm": "^0.45.0",
+    "ioredis": "^5.8.0"
+  }
+}

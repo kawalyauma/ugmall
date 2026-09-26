@@ -1,0 +1,22 @@
+{
+  "name": "@ugmall/reporting",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@ugmall/shared": "workspace:*",
+    "@ugmall/database": "workspace:*",
+    "drizzle-orm": "^0.45.0",
+    "exceljs": "^4.4.0",
+    "pdfkit": "^0.17.2"
+  },
+  "devDependencies": {
+    "@types/pdfkit": "^0.17.0"
+  }
+}

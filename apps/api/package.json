@@ -1,0 +1,39 @@
+{
+  "name": "@ugmall/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=../../.env src/server.ts",
+    "dev:worker": "tsx watch --env-file-if-exists=../../.env src/worker.ts",
+    "build": "tsup",
+    "start": "node dist/server.js",
+    "start:worker": "node dist/worker.js",
+    "seed": "tsx --env-file-if-exists=../../.env src/scripts/seed.ts",
+    "create-admin": "tsx --env-file-if-exists=../../.env src/scripts/create-admin.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.5",
+    "@ugmall/auth": "workspace:*",
+    "@ugmall/database": "workspace:*",
+    "@ugmall/delivery": "workspace:*",
+    "@ugmall/inventory": "workspace:*",
+    "@ugmall/notifications": "workspace:*",
+    "@ugmall/orders": "workspace:*",
+    "@ugmall/payments": "workspace:*",
+    "@ugmall/reporting": "workspace:*",
+    "@ugmall/shared": "workspace:*",
+    "@ugmall/storage": "workspace:*",
+    "bullmq": "^5.61.0",
+    "drizzle-orm": "^0.45.0",
+    "hono": "^4.10.0",
+    "ioredis": "^5.8.0",
+    "pino": "^10.0.0",
+    "sharp": "^0.34.5",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.0"
+  }
+}

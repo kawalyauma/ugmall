@@ -1,0 +1,21 @@
+node_modules/
+.next/
+dist/
+out/
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store
+.turbo/
+*.tsbuildinfo
+next-env.d.ts
+
+# runtime data (lives on the server under /opt/shop, never in git)
+/storage/*
+!/storage/.gitkeep
+/backups/*
+!/backups/.gitkeep
+/data/
+dump.rdb

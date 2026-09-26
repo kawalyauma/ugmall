@@ -1,0 +1,17 @@
+{
+  "name": "@ugmall/storage",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@ugmall/shared": "workspace:*",
+    "sharp": "^0.34.4",
+    "@aws-sdk/client-s3": "^3.900.0"
+  }
+}
