@@ -25,6 +25,7 @@ import { adminPeopleRoutes } from "./routes/admin/people";
 import { adminMarketingRoutes } from "./routes/admin/marketing";
 import { adminReportRoutes } from "./routes/admin/reports";
 import { adminSystemRoutes } from "./routes/admin/system";
+import { adminImportRoutes } from "./routes/admin/imports";
 import type { AppEnv } from "./types";
 
 /**
@@ -51,7 +52,9 @@ export function createApp(container: Container) {
       allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     }),
   );
-  app.use("*", bodyLimit({ maxSize: Number(process.env.MAX_UPLOAD_BYTES ?? 10 * 1024 * 1024) + 1024 * 64 }));
+  const defaultLimit = bodyLimit({ maxSize: Number(process.env.MAX_UPLOAD_BYTES ?? 10 * 1024 * 1024) + 1024 * 64 });
+  const importLimit = bodyLimit({ maxSize: 21 * 1024 * 1024 });
+  app.use("*", (c, next) => (c.req.path === "/admin/imports/preview" ? importLimit(c, next) : defaultLimit(c, next)));
   app.use("*", csrfGuard);
 
   app.get("/health", async (c) => {
@@ -89,7 +92,7 @@ export function createApp(container: Container) {
   // Admin API
   app.route("/admin/auth", adminAuthRoutes);
   app.use("/admin/*", async (c, next) => (c.req.path.startsWith("/admin/auth/") ? next() : requireStaff(c, next)));
-  for (const r of [adminCatalogRoutes, adminOrderRoutes, adminDeliveryRoutes, adminPeopleRoutes, adminMarketingRoutes, adminReportRoutes, adminSystemRoutes]) {
+  for (const r of [adminCatalogRoutes, adminOrderRoutes, adminDeliveryRoutes, adminPeopleRoutes, adminMarketingRoutes, adminReportRoutes, adminSystemRoutes, adminImportRoutes]) {
     app.route("/admin", r);
   }
   app.route("/admin/inventory", adminInventoryRoutes);

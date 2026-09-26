@@ -116,6 +116,8 @@ export const mediaFiles = pgTable(
     storageProvider: text("storage_provider").notNull().default("local"),
     storagePath: text("storage_path").notNull().unique(),
     publicUrl: text("public_url"),
+    /** Where an imported file was downloaded from (dedupes re-imports). */
+    sourceUrl: text("source_url"),
     isPublic: boolean("is_public").notNull().default(true),
     /** Resized renditions: { thumb: {path,url,width}, medium: {...} } */
     variants: jsonb("variants").$type<Record<string, { path: string; url: string | null; width: number; height: number; size: number }>>(),
@@ -123,7 +125,7 @@ export const mediaFiles = pgTable(
     uploadedByCustomer: uuid("uploaded_by_customer"),
     createdAt: createdAt(),
   },
-  (t) => [index("media_area_idx").on(t.area)],
+  (t) => [index("media_area_idx").on(t.area), index("media_source_url_idx").on(t.sourceUrl)],
 );
 
 /* --------------------------------------------------------------- catalogue */
@@ -135,6 +137,8 @@ export const categories = pgTable(
     parentId: uuid("parent_id"),
     name: text("name").notNull(),
     slug: text("slug").notNull().unique(),
+    /** ID in an external catalogue (e.g. Jumia category 1029598) used to match imports. */
+    externalId: text("external_id").unique(),
     description: text("description"),
     imageId: uuid("image_id").references(() => mediaFiles.id, { onDelete: "set null" }),
     sortOrder: integer("sort_order").notNull().default(0),
@@ -151,6 +155,7 @@ export const brands = pgTable("brands", {
   id: id(),
   name: text("name").notNull().unique(),
   slug: text("slug").notNull().unique(),
+  externalId: text("external_id").unique(),
   logoId: uuid("logo_id").references(() => mediaFiles.id, { onDelete: "set null" }),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: createdAt(),
@@ -181,6 +186,8 @@ export const products = pgTable(
     sizes: text("sizes").array().notNull().default(sql`'{}'::text[]`),
     colours: text("colours").array().notNull().default(sql`'{}'::text[]`),
     tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
+    /** Extra product facts shown as a details table: gender, material, pack contents, ... */
+    attributes: jsonb("attributes").$type<Record<string, string>>().notNull().default({}),
     seoTitle: text("seo_title"),
     seoDescription: text("seo_description"),
     ratingAverage: integer("rating_avg_x100").notNull().default(0),
@@ -676,6 +683,21 @@ export const purchaseItems = pgTable("purchase_items", {
   quantity: integer("quantity").notNull(),
   unitCost: integer("unit_cost").notNull(),
   receivedQuantity: integer("received_quantity").notNull().default(0),
+});
+
+/* ---------------------------------------------------------------- imports */
+
+export const productImports = pgTable("product_imports", {
+  id: id(),
+  fileName: text("file_name").notNull(),
+  storagePath: text("storage_path"),
+  format: text("format").notNull(), // jumia | generic
+  status: text("status").notNull().default("previewed"), // previewed | completed | failed
+  options: jsonb("options"),
+  summary: jsonb("summary"),
+  staffId: uuid("staff_id").references(() => staffUsers.id),
+  createdAt: createdAt(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
 });
 
 /* ---------------------------------------------------------------- expenses */

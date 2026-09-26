@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { looksLikeHtml, sanitizeHtml, htmlToText } from "@ugmall/shared";
 import { ApiError, serverGet } from "@/lib/api";
 import type { ProductDetail, ShopSettings } from "@/lib/types";
 import { ProductGrid } from "@/components/product-card";
@@ -40,7 +41,7 @@ export default async function ProductPage({ params }: Props) {
     name: p.name,
     sku: p.sku,
     image: p.images.map((i) => i.url).filter(Boolean),
-    description: p.description,
+    description: p.description ? htmlToText(p.description) : undefined,
     brand: p.brand ? { "@type": "Brand", name: p.brand } : undefined,
     aggregateRating: p.rating ? { "@type": "AggregateRating", ratingValue: p.rating.average, reviewCount: p.rating.count } : undefined,
     offers: {
@@ -67,7 +68,25 @@ export default async function ProductPage({ params }: Props) {
       {p.description && (
         <section className="mt-8 rounded-2xl border border-gray-200 bg-white p-5">
           <h2 className="mb-2 font-bold">Description</h2>
-          <div className="whitespace-pre-line text-sm leading-relaxed text-gray-700">{p.description}</div>
+          {looksLikeHtml(p.description) ? (
+            // Sanitised again at render time: only simple formatting tags, no attributes.
+            <div className="prose-shop text-sm leading-relaxed text-gray-700" dangerouslySetInnerHTML={{ __html: sanitizeHtml(p.description) }} />
+          ) : (
+            <div className="whitespace-pre-line text-sm leading-relaxed text-gray-700">{p.description}</div>
+          )}
+        </section>
+      )}
+      {Object.keys(p.attributes ?? {}).length > 0 && (
+        <section className="mt-4 rounded-2xl border border-gray-200 bg-white p-5">
+          <h2 className="mb-2 font-bold">Details</h2>
+          <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+            {Object.entries(p.attributes).map(([k, v]) => (
+              <div key={k} className="flex gap-2 border-b border-gray-100 pb-2">
+                <dt className="w-32 shrink-0 text-gray-500">{k}</dt>
+                <dd className="text-gray-800">{v}</dd>
+              </div>
+            ))}
+          </dl>
         </section>
       )}
       <Reviews productId={p.id} rating={p.rating} />

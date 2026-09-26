@@ -20,7 +20,7 @@ export async function readUpload(form: FormData, field = "file"): Promise<{ buff
 export async function saveImage(
   db: Database,
   storage: StorageProvider,
-  opts: { area: StorageArea; folders: string[]; baseName: string; buffer: Buffer; originalName?: string; staffId?: string; customerId?: string },
+  opts: { area: StorageArea; folders: string[]; baseName: string; buffer: Buffer; originalName?: string; staffId?: string; customerId?: string; sourceUrl?: string },
 ) {
   const visibility = PUBLIC_STORAGE_AREAS.includes(opts.area) ? "public" : "private";
   const folderKey = [opts.area, ...opts.folders.map(safeSegment)].join("/");
@@ -46,6 +46,7 @@ export async function saveImage(
         variants: img.variants,
         uploadedByStaff: opts.staffId,
         uploadedByCustomer: opts.customerId,
+        sourceUrl: opts.sourceUrl,
       })
       .returning();
     return row!;

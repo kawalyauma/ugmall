@@ -23,13 +23,27 @@ ugmall/
 │   └── api/               Hono API (+ worker, seed, scripts)  :4000
 ├── packages/
 │   ├── database/  auth/  inventory/  orders/  payments/  delivery/
-│   ├── storage/   notifications/  reporting/  shared/
+│   ├── storage/   notifications/  reporting/  shared/  importer/
 ├── docker/                Dockerfiles + Nginx config
 ├── scripts/               setup-server, deploy, backup, restore, certificates
 ├── docs/
 ├── storage/  backups/     (local dev only — production uses /opt/shop)
 └── docker-compose.yml
 ```
+
+---
+
+## Importing products (Jumia / Kilimall sheets or your own)
+
+**Admin → Products → Import** (or `pnpm --filter @ugmall/api import-products -- file.xlsx --dry-run`).
+
+- Accepts the seller-center *Upload Template* (`.xlsx`, including exports that other libraries fail to open) or a simple `.csv`/`.xlsx` (download the template on the import page).
+- **Each row is a variation.** Rows sharing a `ParentSKU` become **one product**; `size` / `men_pant_size` become its size variants (`SellerSKU` = variant SKU). A colour axis is only added when colour differs between rows of the same product (otherwise "Black, Grey…" is kept as a product detail, e.g. for multi-packs).
+- **Brands and categories are imported too**: `1039426 - Fashion` → brand *Fashion*; `1029598 - Fashion / Men's Fashion / Clothing / Pants / Trousers` → the full category tree (the shared "Fashion" root is dropped by default so the shop menu starts at Men's / Women's / Kid's). Jumia IDs are stored so later imports match the same records.
+- **Safe to re-run**: products and variants are matched by SKU and updated, never duplicated. Stock can be *set* to the sheet (stock count), *added*, or left alone; every change is recorded in the inventory audit trail as "Import: <file>". Optionally hide sizes that are on the shop but not in the file.
+- Always shows a **preview** (new vs updated products, new categories, row-level problems) before anything is written.
+- Product images listed in the sheet are **downloaded to your server** by the worker (`storage/products/<category>/<SKU>/`), converted to WebP; failed downloads retry automatically. The server must be able to reach the image URLs.
+- HTML descriptions are sanitised; extra columns (gender, material, pack contents, season…) appear as a *Details* table on the product page.
 
 ---
 

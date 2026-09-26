@@ -11,7 +11,8 @@
     "start:worker": "node dist/worker.js",
     "seed": "tsx --env-file-if-exists=../../.env src/scripts/seed.ts",
     "create-admin": "tsx --env-file-if-exists=../../.env src/scripts/create-admin.ts",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "import-products": "tsx --env-file-if-exists=../../.env src/scripts/import-products.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1141.0",
@@ -19,6 +20,7 @@
     "@ugmall/auth": "workspace:*",
     "@ugmall/database": "workspace:*",
     "@ugmall/delivery": "workspace:*",
+    "@ugmall/importer": "workspace:*",
     "@ugmall/inventory": "workspace:*",
     "@ugmall/notifications": "workspace:*",
     "@ugmall/orders": "workspace:*",
@@ -29,6 +31,7 @@
     "bullmq": "^5.61.0",
     "drizzle-orm": "^0.45.0",
     "exceljs": "^4.4.0",
+    "fflate": "^0.8.3",
     "hono": "^4.10.0",
     "ioredis": "^5.8.0",
     "pdfkit": "^0.17.2",

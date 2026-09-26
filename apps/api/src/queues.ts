@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { orderItems, orders, staffUsers, type Database } from "@ugmall/database";
 import type { NotificationEvent, NotificationJob } from "@ugmall/notifications";
 import type { OrderEffects } from "@ugmall/orders";
+import type { ImageJob } from "@ugmall/importer";
 import { prettyUgPhone } from "@ugmall/shared";
 
 export const QUEUE_NAMES = {
@@ -10,6 +11,7 @@ export const QUEUE_NAMES = {
   payments: "payment-checks",
   orders: "order-expiry",
   maintenance: "maintenance",
+  imports: "imports",
 } as const;
 
 export function createQueues(connection: ConnectionOptions) {
@@ -22,6 +24,10 @@ export function createQueues(connection: ConnectionOptions) {
     payments: new Queue<{ paymentId: string; attempt: number }>(QUEUE_NAMES.payments, { connection, defaultJobOptions }),
     orders: new Queue<{ orderId: string }>(QUEUE_NAMES.orders, { connection, defaultJobOptions }),
     maintenance: new Queue(QUEUE_NAMES.maintenance, { connection, defaultJobOptions }),
+    imports: new Queue<ImageJob>(QUEUE_NAMES.imports, {
+      connection,
+      defaultJobOptions: { ...defaultJobOptions, attempts: 4, backoff: { type: "exponential", delay: 60_000 } },
+    }),
   };
 }
 export type Queues = ReturnType<typeof createQueues>;

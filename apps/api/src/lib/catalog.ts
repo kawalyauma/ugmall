@@ -10,6 +10,7 @@ import {
   type Database,
 } from "@ugmall/database";
 import { activePromotions, effectivePrice, type ActivePromotion } from "@ugmall/orders";
+import { htmlToText } from "@ugmall/shared";
 import type { StockReservations } from "@ugmall/inventory";
 
 export type ImageDTO = { id: string; url: string | null; medium: string | null; thumb: string | null; alt: string | null; variantId: string | null; width: number | null; height: number | null };
@@ -189,10 +190,11 @@ export async function productDetail(db: Database, reservations: StockReservation
     sizes: row.p.sizes,
     colours: row.p.colours,
     tags: row.p.tags,
+    attributes: row.p.attributes,
     weightGrams: row.p.weightGrams,
     category: row.category ? { id: row.category.id, name: row.category.name, slug: row.category.slug } : null,
     brand: row.brandName,
-    seo: { title: row.p.seoTitle ?? row.p.name, description: row.p.seoDescription ?? row.p.description?.slice(0, 160) ?? null },
+    seo: { title: row.p.seoTitle ?? row.p.name, description: row.p.seoDescription ?? (row.p.description ? htmlToText(row.p.description).slice(0, 160) : null) },
     rating: row.p.ratingCount ? { average: row.p.ratingAverage / 100, count: row.p.ratingCount } : null,
     images,
     variants: variants.map((v) => {

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
+import { Plus, Upload } from "lucide-react";
 import { qs } from "@/lib/api";
 import { useApi } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
@@ -35,9 +35,14 @@ export default function Products() {
         title="Products"
         subtitle={data ? `${data.total} products` : undefined}
         actions={
-          <Link href="/products/new">
-            <Button size="sm"><Plus className="size-4" /> Add product</Button>
-          </Link>
+          <>
+            <Link href="/products/import">
+              <Button size="sm" variant="secondary"><Upload className="size-4" /> Import</Button>
+            </Link>
+            <Link href="/products/new">
+              <Button size="sm"><Plus className="size-4" /> Add product</Button>
+            </Link>
+          </>
         }
       />
       <div className="mb-3 flex gap-2">

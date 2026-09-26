@@ -1,0 +1,19 @@
+{
+  "name": "@ugmall/importer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@ugmall/database": "workspace:*",
+    "@ugmall/inventory": "workspace:*",
+    "@ugmall/shared": "workspace:*",
+    "drizzle-orm": "^0.45.0",
+    "fflate": "^0.8.2"
+  }
+}

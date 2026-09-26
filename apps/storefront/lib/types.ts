@@ -41,6 +41,7 @@ export interface ProductDetail extends Omit<ProductCard, "image" | "hoverImage" 
   description: string | null;
   optionNames: string[];
   tags: string[];
+  attributes: Record<string, string>;
   category: { id: string; name: string; slug: string } | null;
   seo: { title: string; description: string | null };
   images: ImageDTO[];

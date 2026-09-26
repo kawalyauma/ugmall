@@ -34,6 +34,7 @@ owner's own server with Docker; there is no dependency on cloud object storage.
 | `packages/delivery` | Delivery zone fee calculation |
 | `packages/notifications` | WhatsApp Cloud API provider, message templates, notification log |
 | `packages/reporting` | Report queries, dashboard, CSV/XLSX/PDF export, invoices |
+| `packages/importer` | Spreadsheet reader (xlsx/csv), Jumia seller-center mapping (variation rows → products + variants, brands, category tree), idempotent apply |
 | `apps/api` | HTTP layer (Hono), auth middleware, queues, worker, scripts |
 | `apps/storefront` | Customer site (Next.js, mobile-first) |
 | `apps/admin` | Back office + rider app (Next.js) |

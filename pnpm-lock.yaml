@@ -81,6 +81,9 @@ importers:
       '@ugmall/delivery':
         specifier: workspace:*
         version: link:../../packages/delivery
+      '@ugmall/importer':
+        specifier: workspace:*
+        version: link:../../packages/importer
       '@ugmall/inventory':
         specifier: workspace:*
         version: link:../../packages/inventory
@@ -111,6 +114,9 @@ importers:
       exceljs:
         specifier: ^4.4.0
         version: 4.4.0
+      fflate:
+        specifier: ^0.8.3
+        version: 0.8.3
       hono:
         specifier: ^4.10.0
         version: 4.13.9
@@ -210,6 +216,24 @@ importers:
       '@ugmall/shared':
         specifier: workspace:*
         version: link:../shared
+
+  packages/importer:
+    dependencies:
+      '@ugmall/database':
+        specifier: workspace:*
+        version: link:../database
+      '@ugmall/inventory':
+        specifier: workspace:*
+        version: link:../inventory
+      '@ugmall/shared':
+        specifier: workspace:*
+        version: link:../shared
+      drizzle-orm:
+        specifier: ^0.45.0
+        version: 0.45.3(postgres@3.4.9)
+      fflate:
+        specifier: ^0.8.2
+        version: 0.8.3
 
   packages/inventory:
     dependencies:
@@ -2122,6 +2146,9 @@ packages:
     peerDependenciesMeta:
       picomatch:
         optional: true
+
+  fflate@0.8.3:
+    resolution: {integrity: sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==}
 
   fix-dts-default-cjs-exports@1.0.1:
     resolution: {integrity: sha512-pVIECanWFC61Hzl2+oOCtoJ3F17kglZC/6N94eRWycFgBH35hHx0Li604ZIzhseh97mf2p0cv7vVrOZGoqhlEg==}
@@ -4269,6 +4296,8 @@ snapshots:
   fdir@6.5.0(picomatch@4.0.7):
     optionalDependencies:
       picomatch: 4.0.7
+
+  fflate@0.8.3: {}
 
   fix-dts-default-cjs-exports@1.0.1:
     dependencies:
