@@ -21,9 +21,9 @@ export function Footer({ settings }: { settings: ShopSettings }) {
           <p>✉️ {settings.supportEmail}</p>
         </div>
         <div>
-          <div className="font-semibold text-gray-900">Visit / Pickup</div>
-          <p className="mt-2">{settings.pickupAddress}</p>
-          <p>{settings.pickupHours}</p>
+          <div className="font-semibold text-gray-900">Delivery</div>
+          <p className="mt-2">We deliver to your door across Uganda — boda in Kampala, courier and bus parcel upcountry.</p>
+          <p>{settings.businessHours}</p>
         </div>
         <div>
           <div className="font-semibold text-gray-900">Help</div>
@@ -39,7 +39,9 @@ export function Footer({ settings }: { settings: ShopSettings }) {
               </Link>
             </li>
           </ul>
-          <p className="mt-3 text-xs">We accept MTN Mobile Money, Airtel Money and Cash on Delivery.</p>
+          <p className="mt-3 text-xs">
+            We accept MTN Mobile Money and Airtel Money{settings.codMaxOrderTotal ? `, and Cash on Delivery for orders up to UGX ${settings.codMaxOrderTotal.toLocaleString("en-US")}` : " and Cash on Delivery"}.
+          </p>
         </div>
       </div>
       <div className="border-t border-gray-100 py-4 text-center text-xs text-gray-400">

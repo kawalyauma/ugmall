@@ -5,7 +5,7 @@ designed to run entirely on **your own server**: database, cache, queues, produc
 images, invoices and receipts all live on your machine. No cloud object storage.
 
 - **Storefront** (Next.js): categories, search, product variants (sizes/colours), cart, wishlist, reviews, offers, guest checkout, order tracking, **Order on WhatsApp**
-- **Payments**: **Ssentezo Wallet** (MTN Mobile Money + Airtel Money), Cash on Delivery, Pay on Pickup — behind a `PaymentProvider` interface
+- **Payments**: **Ssentezo Wallet** (MTN Mobile Money + Airtel Money) and Cash on Delivery — behind a `PaymentProvider` interface. **Cash on Delivery is only allowed for orders up to UGX 150,000** (total incl. delivery; change in Admin → Settings, 0 = no limit), enforced by the server for web and staff-entered orders. There are **no pickup stations**: every order is delivered
 - **Admin** (Next.js): dashboard, products, variants, photos, categories, brands, inventory with audit trail, orders, payments, refunds, deliveries, riders & COD cash, returns, customers, reviews, suppliers & purchases, promotions & coupons, reports (PDF / Excel / CSV / print), expenses, staff, roles & permissions, settings
 - **Rider app** (in the admin, mobile): assigned deliveries, call / WhatsApp / navigate, cash to collect, delivery confirmation
 - **WhatsApp Business** notifications: order received, payment confirmed, order confirmed, rider dispatched, delivered, cancelled

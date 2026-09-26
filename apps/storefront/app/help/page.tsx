@@ -22,11 +22,14 @@ export default async function Help() {
             ))}
           </tbody>
         </table>
-        <p className="mt-2">Pickup is free from {s.pickupAddress} ({s.pickupHours}).</p>
+        <p className="mt-2">All orders are delivered to you — choose your region, district, division and village at checkout and add a landmark for the rider.</p>
       </section>
       <section>
         <h2 className="mb-2 text-lg font-semibold">Payment</h2>
-        <p>Pay securely with MTN Mobile Money or Airtel Money — you'll get a prompt on your phone to enter your PIN. You can also pay cash (or MoMo) to the rider on delivery, or at the shop on pickup.</p>
+        <p>
+          Pay securely with MTN Mobile Money or Airtel Money — you&apos;ll get a prompt on your phone to enter your PIN. Cash on Delivery (cash or Mobile Money to the
+          rider) is available {s.codMaxOrderTotal ? <>for orders up to <b>{formatUGX(s.codMaxOrderTotal)}</b> including delivery; larger orders are paid by Mobile Money before dispatch</> : <>for all orders</>}.
+        </p>
       </section>
       <section>
         <h2 className="mb-2 text-lg font-semibold">Returns</h2>

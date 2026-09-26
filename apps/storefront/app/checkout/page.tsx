@@ -7,6 +7,7 @@ import { Clock, Lock } from "lucide-react";
 import {
   DELIVERY_METHOD_LABELS,
   PAYMENT_METHOD_LABELS,
+  codAllowed,
   detectNetwork,
   formatUGX,
   isValidUgPhone,
@@ -32,6 +33,7 @@ interface Quote {
 }
 
 const SAVED_KEY = "ugmall.checkout";
+type OrderablePayment = Exclude<PaymentMethod, "pay_on_pickup">;
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -51,7 +53,7 @@ export default function CheckoutPage() {
     nearbyPlace: "",
     address: "",
     deliveryMethod: "boda" as DeliveryMethod,
-    paymentMethod: "mtn_momo" as PaymentMethod,
+    paymentMethod: "mtn_momo" as OrderablePayment,
     paymentPhone: "",
     couponCode: "",
     notes: "",
@@ -96,25 +98,30 @@ export default function CheckoutPage() {
   const secondsLeft = hold ? Math.max(0, Math.floor((hold.expiresAt - now) / 1000)) : 0;
 
   const zone = areaInfo?.zone ?? null;
+  // Every order is delivered (no pickup stations); options come from the customer's zone.
   const methods = useMemo<DeliveryMethod[]>(() => {
-    const m = new Set<DeliveryMethod>(["pickup"]);
-    for (const x of zone?.methods ?? ["boda"]) m.add(x as DeliveryMethod);
-    return [...m];
+    const m = (zone?.methods ?? ["boda"]).filter((x) => x !== "pickup") as DeliveryMethod[];
+    return m.length ? m : ["boda"];
   }, [zone]);
   useEffect(() => {
-    if (!methods.includes(f.deliveryMethod)) set("deliveryMethod", methods.find((m) => m !== "pickup") ?? "pickup");
+    if (!methods.includes(f.deliveryMethod)) set("deliveryMethod", methods[0]!);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [methods]);
 
-  const paymentOptions = (settings.paymentMethods as PaymentMethod[]).filter((m) => (f.deliveryMethod === "pickup" ? m !== "cash_on_delivery" : m !== "pay_on_pickup"));
+  // Cash on Delivery only up to the shop's limit (order total incl. delivery).
+  const orderTotal = quote?.total ?? cart.subtotal;
+  const codLimit = settings.codMaxOrderTotal ?? 0;
+  const codOk = codAllowed(orderTotal, codLimit);
+  const paymentOptions = (settings.paymentMethods as PaymentMethod[]).filter((m): m is OrderablePayment => m !== "pay_on_pickup");
+  const usablePayments = paymentOptions.filter((m) => m !== "cash_on_delivery" || codOk);
   useEffect(() => {
-    if (paymentOptions.length && !paymentOptions.includes(f.paymentMethod)) set("paymentMethod", paymentOptions[0]!);
+    if (usablePayments.length && !usablePayments.includes(f.paymentMethod)) set("paymentMethod", usablePayments[0]!);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paymentOptions.join()]);
+  }, [usablePayments.join()]);
 
   // live totals
   useEffect(() => {
-    if (!cart.count || (f.deliveryMethod !== "pickup" && !f.locationId)) return setQuote(null);
+    if (!cart.count || !f.locationId) return setQuote(null);
     const t = setTimeout(() => {
       api<Quote>("/store/checkout/quote", {
         body: { locationId: f.locationId ? Number(f.locationId) : null, deliveryMethod: f.deliveryMethod, couponCode: f.couponCode || null, phone: isValidUgPhone(f.phone) ? f.phone : null },
@@ -136,8 +143,9 @@ export default function CheckoutPage() {
     if (f.customerName.trim().length < 2) e.customerName = "Enter your name";
     if (!isValidUgPhone(f.phone)) e.phone = "Enter a valid phone, e.g. 0772 123 456";
     if (f.altPhone && !isValidUgPhone(f.altPhone)) e.altPhone = "Invalid phone number";
-    if (f.deliveryMethod !== "pickup" && !f.locationId) e.locationId = "Choose at least your district";
-    if (f.deliveryMethod !== "pickup" && f.address.trim().length < 2) e.address = "Tell us a landmark so the rider can find you";
+    if (!f.locationId) e.locationId = "Choose at least your district";
+    if (f.address.trim().length < 2) e.address = "Tell us a landmark so the rider can find you";
+    if (f.paymentMethod === "cash_on_delivery" && !codOk) e.paymentMethod = "Cash on Delivery is not available for this order amount";
     if (isMomo && f.paymentPhone && !isValidUgPhone(f.paymentPhone)) e.paymentPhone = "Invalid Mobile Money number";
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -154,7 +162,7 @@ export default function CheckoutPage() {
           ...f,
           reservationId: hold?.id,
           locationId: f.locationId ? Number(f.locationId) : undefined,
-          address: f.deliveryMethod === "pickup" && !f.address.trim() ? "Pickup at shop" : f.address,
+          address: f.address,
           couponCode,
           notes,
         },
@@ -241,14 +249,14 @@ export default function CheckoutPage() {
                   {areaInfo.moreSpecificMayDiffer && <span className="block text-xs text-amber-700">Choose your division and village for the exact fee.</span>}
                 </div>
               ) : (
-                <div className="text-amber-700">We don't deliver here yet — choose Pickup or chat with us on WhatsApp.</div>
+                <div className="text-amber-700">We don't deliver here yet — please chat with us on WhatsApp.</div>
               )}
             </div>
           )}
           <Field label="Nearby place or exact location (if your place isn't listed)" hint="e.g. Kisaasi, near Total petrol station">
             <Input value={f.nearbyPlace} onChange={(e) => set("nearbyPlace", e.target.value)} maxLength={200} />
           </Field>
-          <Field label={`Landmark / directions${f.deliveryMethod === "pickup" ? " (optional)" : ""}`} error={errors.address} hint="e.g. Blue gate opposite Mukwano shop, 2nd floor">
+          <Field label="Landmark / directions" error={errors.address} hint="e.g. Blue gate opposite Mukwano shop, 2nd floor">
             <Input value={f.address} onChange={(e) => set("address", e.target.value)} autoComplete="street-address" maxLength={300} />
           </Field>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -263,24 +271,29 @@ export default function CheckoutPage() {
               </button>
             ))}
           </div>
-          {f.deliveryMethod === "pickup" && (
-            <p className="rounded-xl bg-gray-50 p-3 text-sm">
-              Pick up at <b>{settings.pickupAddress}</b> · {settings.pickupHours}
-            </p>
-          )}
         </section>
 
         <section className="space-y-3 rounded-2xl border border-gray-200 bg-white p-4">
           <h2 className="font-semibold">Payment</h2>
           <div className="grid gap-2">
-            {paymentOptions.map((m) => (
-              <label key={m} className={cn("flex cursor-pointer items-center gap-3 rounded-xl border p-3", f.paymentMethod === m ? "border-brand-700 bg-brand-50" : "border-gray-300")}>
-                <input type="radio" name="pm" checked={f.paymentMethod === m} onChange={() => set("paymentMethod", m)} className="accent-brand-700" />
-                <span className="font-medium">{PAYMENT_METHOD_LABELS[m]}</span>
+            {paymentOptions.map((m) => {
+              const disabled = m === "cash_on_delivery" && !codOk;
+              return (
+              <label key={m} className={cn("flex items-center gap-3 rounded-xl border p-3", disabled ? "cursor-not-allowed border-gray-200 bg-gray-50 text-gray-400" : "cursor-pointer", f.paymentMethod === m ? "border-brand-700 bg-brand-50" : !disabled && "border-gray-300")}>
+                <input type="radio" name="pm" disabled={disabled} checked={f.paymentMethod === m} onChange={() => set("paymentMethod", m)} className="accent-brand-700" />
+                <span className="font-medium">
+                  {PAYMENT_METHOD_LABELS[m]}
+                  {m === "cash_on_delivery" && codLimit > 0 && (
+                    <span className={cn("block text-xs font-normal", disabled ? "text-amber-700" : "text-gray-500")}>
+                      {disabled ? `Not available for orders above ${formatUGX(codLimit)} — pay with Mobile Money` : `For orders up to ${formatUGX(codLimit)}`}
+                    </span>
+                  )}
+                </span>
                 {m === "mtn_momo" && <span className="ml-auto rounded bg-yellow-300 px-2 text-xs font-bold text-black">MTN</span>}
                 {m === "airtel_money" && <span className="ml-auto rounded bg-red-600 px-2 text-xs font-bold text-white">airtel</span>}
               </label>
-            ))}
+              );
+            })}
           </div>
           {isMomo && (
             <Field label="Mobile Money number" error={errors.paymentPhone} hint={networkWarning ?? "Leave empty to use your phone number above. You'll get a prompt to enter your PIN."}>

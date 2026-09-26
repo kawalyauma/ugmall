@@ -3,7 +3,7 @@ import { z } from "zod";
 import { and, desc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import { deliveries, deliveryZones, locations, orders, roles, staffUsers } from "@ugmall/database";
 import { addLocation, assignZone, resolveLocation, searchLocations, zoneCoverage } from "@ugmall/delivery";
-import { DELIVERY_METHODS, DELIVERY_STATUSES, PERMISSIONS } from "@ugmall/shared";
+import { DELIVERY_STATUSES, ORDERABLE_DELIVERY_METHODS, PERMISSIONS } from "@ugmall/shared";
 import { ApiError, body } from "../../lib/http";
 import { audit } from "../../lib/audit";
 import { crudRoutes } from "../../lib/crud";
@@ -27,7 +27,7 @@ adminDeliveryRoutes.route(
       perKgFee: money.nullable().optional(),
       freeDeliveryThreshold: money.nullable().optional(),
       etaText: z.string().max(80).nullable().optional(),
-      methods: z.array(z.enum(DELIVERY_METHODS)).default(["boda", "pickup"]),
+      methods: z.array(z.enum(ORDERABLE_DELIVERY_METHODS)).min(1).default(["boda"]),
       sortOrder: z.number().int().default(0),
       isActive: z.boolean().default(true),
     }),

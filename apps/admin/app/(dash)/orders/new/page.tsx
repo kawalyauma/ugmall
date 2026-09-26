@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
-import { DELIVERY_METHODS, DELIVERY_METHOD_LABELS, ORDER_SOURCES, PAYMENT_METHODS, PAYMENT_METHOD_LABELS, UG_DISTRICTS } from "@ugmall/shared";
+import { DELIVERY_METHOD_LABELS, ORDERABLE_DELIVERY_METHODS, ORDERABLE_PAYMENT_METHODS, ORDER_SOURCES, PAYMENT_METHOD_LABELS, UG_DISTRICTS } from "@ugmall/shared";
 import { api } from "@/lib/api";
 import { useApi } from "@/lib/hooks";
 import { useToast } from "@/components/toast";
@@ -88,12 +88,12 @@ export default function NewOrder() {
             </Field>
             <Field label="Delivery method">
               <Select value={f.deliveryMethod} onChange={(e) => set("deliveryMethod", e.target.value)}>
-                {DELIVERY_METHODS.map((m) => <option key={m} value={m}>{DELIVERY_METHOD_LABELS[m]}</option>)}
+                {ORDERABLE_DELIVERY_METHODS.map((m) => <option key={m} value={m}>{DELIVERY_METHOD_LABELS[m]}</option>)}
               </Select>
             </Field>
             <Field label="Payment">
               <Select value={f.paymentMethod} onChange={(e) => set("paymentMethod", e.target.value)}>
-                {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{PAYMENT_METHOD_LABELS[m]}</option>)}
+                {ORDERABLE_PAYMENT_METHODS.map((m) => <option key={m} value={m}>{PAYMENT_METHOD_LABELS[m]}</option>)}
               </Select>
             </Field>
             <Field label="MoMo number (if different)"><Input value={f.paymentPhone ?? ""} onChange={(e) => set("paymentPhone", e.target.value)} /></Field>

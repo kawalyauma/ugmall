@@ -14,6 +14,7 @@ import {
   payments,
   refunds,
   returns,
+  settings,
   staffUsers,
   type Database,
   type DbOrTx,
@@ -25,6 +26,8 @@ import { DeliveryError, quoteDelivery, resolveLocation, type ResolvedLocation } 
 import type { PaymentRegistry, VerifyPaymentResult } from "@ugmall/payments";
 import type { NotificationEvent } from "@ugmall/notifications";
 import {
+  codAllowed,
+  DEFAULT_COD_MAX_ORDER_TOTAL,
   canTransition,
   formatOrderNumber,
   isPrepaid,
@@ -120,7 +123,7 @@ export class OrderService {
     let zone: typeof deliveryZones.$inferSelect | null = null;
     if (input.deliveryZoneId) {
       zone = (await this.db.select().from(deliveryZones).where(eq(deliveryZones.id, input.deliveryZoneId)))[0] ?? null;
-    } else if (input.locationId && input.deliveryMethod !== "pickup") {
+    } else if (input.locationId) {
       location = await resolveLocation(this.db, input.locationId);
       if (!location) throw new DeliveryError("Please choose your area again");
       zone = location.zone;
@@ -180,21 +183,33 @@ export class OrderService {
     const altPhone = input.altPhone ? normalizeUgPhone(input.altPhone) : null;
     const paymentPhone = input.paymentPhone ? normalizeUgPhone(input.paymentPhone) : phone;
     const provider = this.paymentsRegistry.forMethod(input.paymentMethod);
-    if (input.paymentMethod === "pay_on_pickup" && input.deliveryMethod !== "pickup") {
-      throw new OrderError("Pay on Pickup is only available when you collect from the shop");
-    }
-    if (input.paymentMethod === "cash_on_delivery" && input.deliveryMethod === "pickup") {
-      throw new OrderError("Choose Pay on Pickup for orders you collect yourself");
-    }
 
     // 1. Reservation
     let reservation = input.reservationId ? await this.reservations.get(input.reservationId) : null;
+    let heldHere = false;
     if (!reservation) {
       if (!input.items?.length) throw new OrderError("Your checkout session expired. Please review your cart.", "RESERVATION_EXPIRED");
       const r = await this.reservations.reserve(input.items, input.reservationId);
       if (!r.ok) throw new OrderError("Some items are no longer available in the quantity you want", "OUT_OF_STOCK", r.shortages);
       reservation = r.reservation;
+      heldHere = true;
     }
+    try {
+      return await this.placeReserved(input, ctx, reservation, { phone, altPhone, paymentPhone, provider });
+    } catch (err) {
+      // A hold created just for this attempt must not linger if the order is refused.
+      if (heldHere) await this.reservations.release(reservation.id).catch(() => {});
+      throw err;
+    }
+  }
+
+  private async placeReserved(
+    input: CheckoutInput,
+    ctx: { source: OrderSource; customerId?: string | null; staffId?: string | null },
+    reservation: NonNullable<Awaited<ReturnType<StockReservations["get"]>>>,
+    p: { phone: string; altPhone: string | null; paymentPhone: string | null; provider: ReturnType<PaymentRegistry["forMethod"]> },
+  ) {
+    const { phone, altPhone, paymentPhone, provider } = p;
 
     const q = await this.quote({
       lines: reservation.items,
@@ -205,6 +220,15 @@ export class OrderService {
       phone,
     });
     if (q.couponError) throw new OrderError(q.couponError, "COUPON");
+    if (input.paymentMethod === "cash_on_delivery") {
+      const limit = await this.codLimit();
+      if (!codAllowed(q.total, limit)) {
+        throw new OrderError(
+          `Cash on Delivery is available for orders up to UGX ${limit.toLocaleString("en-US")}. Please pay this order (UGX ${q.total.toLocaleString("en-US")}) with MTN or Airtel Mobile Money.`,
+          "PAYMENT",
+        );
+      }
+    }
     const prepaid = isPrepaid(input.paymentMethod);
     const status: OrderStatus = prepaid ? "awaiting_payment" : "pending";
     const expiresAt = prepaid ? new Date(Date.now() + this.config.paymentTimeoutMinutes * 60_000) : null;
@@ -234,7 +258,7 @@ export class OrderService {
           phone,
           altPhone,
           email: input.email || null,
-          district: q.location?.district ?? (input.district || (input.deliveryMethod === "pickup" ? "Pickup" : "-")),
+          district: q.location?.district ?? (input.district || "-"),
           area: input.nearbyPlace || q.location?.area || input.area || "-",
           address: input.address,
           locationId: q.location?.location.id ?? input.locationId ?? null,
@@ -324,6 +348,13 @@ export class OrderService {
     }
     await this.effects.notify("order_received", order.id);
     return { order, payment, paymentMessage, trackingUrl: this.trackingUrl(order) };
+  }
+
+  /** Cash on Delivery ceiling from Settings (key codMaxOrderTotal); 0 = no limit. */
+  async codLimit(): Promise<number> {
+    const [row] = await this.db.select().from(settings).where(eq(settings.key, "codMaxOrderTotal"));
+    const v = row ? Number(row.value) : DEFAULT_COD_MAX_ORDER_TOTAL;
+    return Number.isFinite(v) && v >= 0 ? v : DEFAULT_COD_MAX_ORDER_TOTAL;
   }
 
   private paymentRequest(order: Order, payment: Payment) {

@@ -362,7 +362,7 @@ export const deliveryZones = pgTable("delivery_zones", {
   perKgFee: integer("per_kg_fee"),
   freeDeliveryThreshold: integer("free_delivery_threshold"),
   etaText: text("eta_text"),
-  methods: text("methods").array().notNull().default(sql`'{boda,pickup}'::text[]`),
+  methods: text("methods").array().notNull().default(sql`'{boda}'::text[]`),
   sortOrder: integer("sort_order").notNull().default(0),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: createdAt(),

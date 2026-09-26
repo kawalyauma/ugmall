@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { DELIVERY_METHODS, DELIVERY_METHOD_LABELS, prettyUgPhone, type DeliveryMethod, PERMISSIONS as P } from "@ugmall/shared";
+import { ORDERABLE_DELIVERY_METHODS, DELIVERY_METHOD_LABELS, prettyUgPhone, type DeliveryMethod, PERMISSIONS as P } from "@ugmall/shared";
 import { api } from "@/lib/api";
 import { useApi } from "@/lib/hooks";
 import { Resource } from "@/components/resource";
@@ -99,7 +99,7 @@ export default function Deliveries() {
             { name: "perKgFee", label: "Per kg (calculated)", type: "money", nullable: true },
             { name: "freeDeliveryThreshold", label: "Free delivery above (UGX)", type: "money", nullable: true },
             { name: "sortOrder", label: "Sort order", type: "number" },
-            { name: "methods", label: "Methods offered", type: "multiselect", options: DELIVERY_METHODS.map((m) => ({ value: m, label: DELIVERY_METHOD_LABELS[m] })) },
+            { name: "methods", label: "Methods offered", type: "multiselect", options: ORDERABLE_DELIVERY_METHODS.map((m) => ({ value: m, label: DELIVERY_METHOD_LABELS[m] })) },
             { name: "isActive", label: "Active", type: "checkbox" },
           ]}
           columns={[

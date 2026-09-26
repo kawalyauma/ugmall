@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DELIVERY_METHODS, PAYMENT_METHODS } from "./enums";
+import { ORDERABLE_DELIVERY_METHODS, ORDERABLE_PAYMENT_METHODS } from "./enums";
 import { isValidUgPhone } from "./phone";
 
 export const ugPhone = z.string().trim().refine(isValidUgPhone, "Enter a valid Ugandan phone number, e.g. 0772 123 456");
@@ -27,16 +27,16 @@ export const checkoutBaseSchema = z.object({
     address: z.string().trim().min(2, "Tell us a landmark near you").max(300),
     /** Legacy / staff override. Customers get the zone from their area. */
     deliveryZoneId: z.string().uuid().optional(),
-    deliveryMethod: z.enum(DELIVERY_METHODS),
-    paymentMethod: z.enum(PAYMENT_METHODS),
+    deliveryMethod: z.enum(ORDERABLE_DELIVERY_METHODS, { message: "Choose a delivery option" }),
+    paymentMethod: z.enum(ORDERABLE_PAYMENT_METHODS, { message: "Choose a payment method" }),
     paymentPhone: ugPhone.optional().or(z.literal("")),
     couponCode: z.string().trim().max(40).optional().or(z.literal("")),
     notes: z.string().trim().max(1000).optional().or(z.literal("")),
 });
 
-/** Delivery orders need an area (or, for staff, an explicit zone / typed district + area). */
-export const hasDeliveryArea = (v: { deliveryMethod: string; locationId?: number; deliveryZoneId?: string; district?: string; area?: string }) =>
-  v.deliveryMethod === "pickup" || !!v.locationId || !!v.deliveryZoneId || !!(v.district && v.area);
+/** Every order is delivered, so it needs an area (or, for staff, an explicit zone / typed district + area). */
+export const hasDeliveryArea = (v: { locationId?: number; deliveryZoneId?: string; district?: string; area?: string }) =>
+  !!v.locationId || !!v.deliveryZoneId || !!(v.district && v.area);
 export const AREA_RULE = { message: "Choose your district and area", path: ["locationId"] };
 
 export const checkoutSchema = checkoutBaseSchema.refine(hasDeliveryArea, AREA_RULE);

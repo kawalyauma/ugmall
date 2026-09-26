@@ -47,7 +47,9 @@ export class PaymentRegistry {
 export function createPaymentRegistryFromEnv(env: NodeJS.ProcessEnv = process.env): PaymentRegistry {
   const registry = new PaymentRegistry();
   registry.register(new CashOnDeliveryProvider());
-  registry.register(new PayOnPickupProvider());
+  // No pickup stations: "Pay on Pickup" is not offered, but the provider stays
+  // registered (with no methods) so refunds of old pickup orders still work.
+  registry.register(new PayOnPickupProvider(), []);
 
   const mobile = (env.PAYMENT_MOBILE_MONEY_PROVIDER ?? "ssentezo").toLowerCase();
   if (mobile === "ssentezo") {

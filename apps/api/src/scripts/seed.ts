@@ -64,7 +64,7 @@ async function main() {
 
   // Delivery zones
   const zones: (typeof deliveryZones.$inferInsert)[] = [
-    { name: "Kampala Central", district: "Kampala", fee: 5000, etaText: "Same day", methods: ["boda", "internal_rider", "pickup"], sortOrder: 1 },
+    { name: "Kampala Central", district: "Kampala", fee: 5000, etaText: "Same day", methods: ["boda", "internal_rider"], sortOrder: 1 },
     { name: "Makindye", district: "Kampala", fee: 6000, etaText: "Same day", methods: ["boda", "internal_rider"], sortOrder: 2 },
     { name: "Ntinda", district: "Kampala", fee: 7000, etaText: "Same day", methods: ["boda", "internal_rider"], sortOrder: 3 },
     { name: "Kira", district: "Wakiso", fee: 8000, etaText: "Same / next day", methods: ["boda", "internal_rider"], sortOrder: 4 },

@@ -37,3 +37,13 @@ describe("formatting", () => {
     );
   });
 });
+
+describe("cash on delivery policy", () => {
+  it("allows COD up to and including the limit only", async () => {
+    const { codAllowed, DEFAULT_COD_MAX_ORDER_TOTAL } = await import("./enums");
+    expect(DEFAULT_COD_MAX_ORDER_TOTAL).toBe(150000);
+    expect(codAllowed(150000, 150000)).toBe(true);
+    expect(codAllowed(150001, 150000)).toBe(false);
+    expect(codAllowed(900000, 0)).toBe(true); // 0 = no limit
+  });
+});

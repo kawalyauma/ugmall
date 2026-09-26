@@ -8,14 +8,15 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Textarea } from "@/components/ui/input";
 import { Card, PageHeader, StatusBadge, Table, dt, money } from "@/components/ui/kit";
 
-const FIELDS: [string, string, "text" | "textarea" | "bool"][] = [
+const FIELDS: [string, string, "text" | "textarea" | "bool" | "number"][] = [
+  ["codMaxOrderTotal", "Cash on Delivery limit (UGX, order total incl. delivery; 0 = no limit)", "number"],
   ["shopName", "Shop name", "text"],
   ["tagline", "Tagline", "text"],
   ["whatsappNumber", "WhatsApp number (2567XXXXXXXX)", "text"],
   ["supportPhone", "Support phone", "text"],
   ["supportEmail", "Support email", "text"],
-  ["pickupAddress", "Pickup address", "text"],
-  ["pickupHours", "Pickup hours", "text"],
+  ["pickupAddress", "Shop address (invoices & receipts)", "text"],
+  ["pickupHours", "Opening hours", "text"],
   ["businessHours", "Business hours", "text"],
   ["announcement", "Announcement bar", "text"],
   ["heroTitle", "Home page headline", "text"],
@@ -28,12 +29,12 @@ const FIELDS: [string, string, "text" | "textarea" | "bool"][] = [
 
 export default function SettingsPage() {
   const toast = useToast();
-  const { data } = useApi<Record<string, string | boolean>>("/admin/settings");
+  const { data } = useApi<Record<string, string | boolean | number>>("/admin/settings");
   const { data: storage } = useApi<{ driver: string; root?: string; areas: { area: string; files: number; bytes: number }[] }>("/admin/system/storage");
   const { data: queues } = useApi<Record<string, Record<string, number>>>("/admin/system/queues");
   const { data: providers } = useApi<{ id: string; name: string; methods: string[]; offline: boolean; balance: { amount?: number; error?: string } | null }[]>("/admin/payment-providers");
   const { data: notes, reload: reloadNotes } = useApi<{ id: string; template: string; recipient: string; status: string; error: string | null; attempts: number; createdAt: string }[]>("/admin/notifications?limit=50");
-  const [f, setF] = useState<Record<string, string | boolean>>({});
+  const [f, setF] = useState<Record<string, string | boolean | number>>({});
   useEffect(() => {
     if (data) setF(data);
   }, [data]);
@@ -46,7 +47,13 @@ export default function SettingsPage() {
           <div className="grid gap-3 sm:grid-cols-2">
             {FIELDS.map(([k, label, type]) => (
               <Field key={k} label={label} className={type === "textarea" ? "sm:col-span-2" : ""}>
-                {type === "textarea" ? <Textarea value={String(f[k] ?? "")} onChange={(e) => setF((s) => ({ ...s, [k]: e.target.value }))} /> : <Input value={String(f[k] ?? "")} onChange={(e) => setF((s) => ({ ...s, [k]: e.target.value }))} />}
+                {type === "textarea" ? (
+                  <Textarea value={String(f[k] ?? "")} onChange={(e) => setF((s) => ({ ...s, [k]: e.target.value }))} />
+                ) : type === "number" ? (
+                  <Input type="number" min={0} step={1000} value={String(f[k] ?? "")} onChange={(e) => setF((s) => ({ ...s, [k]: e.target.value === "" ? 0 : Number(e.target.value) }))} />
+                ) : (
+                  <Input value={String(f[k] ?? "")} onChange={(e) => setF((s) => ({ ...s, [k]: e.target.value }))} />
+                )}
               </Field>
             ))}
           </div>

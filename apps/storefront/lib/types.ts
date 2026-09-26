@@ -66,6 +66,7 @@ export interface ShopSettings {
   supportEmail: string;
   pickupAddress: string;
   pickupHours: string;
+  codMaxOrderTotal: number;
   businessHours: string;
   heroTitle: string;
   heroSubtitle: string;

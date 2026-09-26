@@ -1,5 +1,6 @@
 import { inArray } from "drizzle-orm";
 import { settings, type Database } from "@ugmall/database";
+import { DEFAULT_COD_MAX_ORDER_TOTAL } from "@ugmall/shared";
 
 export interface ShopSettings {
   shopName: string;
@@ -18,6 +19,8 @@ export interface ShopSettings {
   socialTiktok: string;
   returnPolicy: string;
   lowStockEmailAlerts: boolean;
+  /** Cash on Delivery not allowed above this order total (UGX, incl. delivery). 0 = no limit. */
+  codMaxOrderTotal: number;
 }
 
 export const DEFAULT_SETTINGS: ShopSettings = {
@@ -37,11 +40,13 @@ export const DEFAULT_SETTINGS: ShopSettings = {
   socialTiktok: "",
   returnPolicy: "Returns accepted within 7 days for unworn items with tags.",
   lowStockEmailAlerts: false,
+  codMaxOrderTotal: DEFAULT_COD_MAX_ORDER_TOTAL,
 };
 
 const PUBLIC_KEYS: (keyof ShopSettings)[] = [
   "shopName", "tagline", "whatsappNumber", "supportPhone", "supportEmail", "pickupAddress", "pickupHours",
   "businessHours", "heroTitle", "heroSubtitle", "announcement", "socialFacebook", "socialInstagram", "socialTiktok", "returnPolicy",
+  "codMaxOrderTotal",
 ];
 
 export async function getSettings(db: Database): Promise<ShopSettings> {

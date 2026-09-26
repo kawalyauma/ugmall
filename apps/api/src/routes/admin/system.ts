@@ -19,7 +19,10 @@ adminSystemRoutes.get("/settings", requirePermission(P.settingsManage), async (c
 
 adminSystemRoutes.put("/settings", requirePermission(P.settingsManage), async (c) => {
   const shape = Object.fromEntries(
-    Object.entries(DEFAULT_SETTINGS).map(([k, v]) => [k, (typeof v === "boolean" ? z.boolean() : z.string().max(2000)).optional()]),
+    Object.entries(DEFAULT_SETTINGS).map(([k, v]) => [
+      k,
+      (typeof v === "boolean" ? z.boolean() : typeof v === "number" ? z.coerce.number().int().min(0).max(1_000_000_000) : z.string().max(2000)).optional(),
+    ]),
   );
   const input = await body(c, z.object(shape));
   if (typeof input.whatsappNumber === "string" && !/^256\d{9}$/.test(input.whatsappNumber)) throw new ApiError(422, "WhatsApp number must look like 2567XXXXXXXX");

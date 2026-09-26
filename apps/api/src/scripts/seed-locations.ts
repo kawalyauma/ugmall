@@ -12,7 +12,7 @@ import { findByPath, seedUgandaLocations } from "@ugmall/delivery";
 /** Starter coverage: which areas each zone covers. Edit later in Admin → Deliveries. */
 const STARTER_COVERAGE: { zone: string; fee?: number; eta?: string; methods?: string[]; paths: string[][] }[] = [
   { zone: "Upcountry", paths: [["Central"], ["Eastern"], ["Northern"], ["Western"]] },
-  { zone: "Kampala – other areas", fee: 6000, eta: "Same day", methods: ["boda", "internal_rider", "pickup"], paths: [["Central", "Kampala"]] },
+  { zone: "Kampala – other areas", fee: 6000, eta: "Same day", methods: ["boda", "internal_rider"], paths: [["Central", "Kampala"]] },
   { zone: "Kampala Central", paths: [["Central", "Kampala", "Kampala Central"]] },
   { zone: "Makindye", paths: [["Central", "Kampala", "Makindye Division"]] },
   { zone: "Ntinda", paths: [["Central", "Kampala", "Nakawa", "Ntinda"]] },
@@ -38,7 +38,7 @@ export async function seedLocations(db: Database, log = console.log) {
   for (const c of STARTER_COVERAGE) {
     let [zone] = await db.select().from(deliveryZones).where(eq(deliveryZones.name, c.zone));
     if (!zone && c.fee !== undefined) {
-      [zone] = await db.insert(deliveryZones).values({ name: c.zone, fee: c.fee, etaText: c.eta, methods: c.methods ?? ["boda", "pickup"], sortOrder: 7 }).returning();
+      [zone] = await db.insert(deliveryZones).values({ name: c.zone, fee: c.fee, etaText: c.eta, methods: c.methods ?? ["boda"], sortOrder: 7 }).returning();
     }
     if (!zone) continue;
     for (const p of c.paths) {

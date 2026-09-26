@@ -66,3 +66,19 @@ export const UG_DISTRICTS = [
   "Fort Portal", "Arua", "Hoima", "Kabale", "Soroti", "Tororo", "Mityana", "Mpigi", "Luwero", "Iganga",
   "Kasese", "Busia", "Kitgum", "Masindi", "Mubende", "Other",
 ] as const;
+
+/**
+ * What customers and staff can choose for new orders. "pickup" and
+ * "pay_on_pickup" are no longer offered (no pickup stations); they stay in
+ * the enums above only so old orders still display correctly.
+ */
+export const ORDERABLE_DELIVERY_METHODS = ["boda", "courier", "bus_parcel", "internal_rider", "third_party"] as const satisfies readonly DeliveryMethod[];
+export const ORDERABLE_PAYMENT_METHODS = ["mtn_momo", "airtel_money", "card", "cash_on_delivery"] as const satisfies readonly PaymentMethod[];
+
+/** Cash on Delivery policy: not allowed above this order total (UGX). Configurable in Settings. */
+export const DEFAULT_COD_MAX_ORDER_TOTAL = 150_000;
+
+/** limit 0 / null = no limit. The order total includes delivery. */
+export function codAllowed(orderTotal: number, limit: number | null | undefined): boolean {
+  return !limit || orderTotal <= limit;
+}
