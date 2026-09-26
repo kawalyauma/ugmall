@@ -55,12 +55,15 @@ export function Header({ categories }: { categories: Category[] }) {
           </Link>
         </nav>
       </div>
-      <div className="container-page hidden gap-5 pb-2 text-sm font-medium text-gray-600 md:flex">
-        {top.map((c) => (
-          <Link key={c.id} href={`/c/${c.slug}`} className="hover:text-brand-700">
+      <div className="container-page hidden items-center gap-5 overflow-hidden pb-2 text-sm font-medium text-gray-600 md:flex">
+        {top.slice(0, 8).map((c) => (
+          <Link key={c.id} href={`/c/${c.slug}`} className="min-w-0 truncate hover:text-brand-700">
             {c.name}
           </Link>
         ))}
+        <Link href="/categories" className="ml-auto shrink-0 font-semibold text-brand-700 hover:underline">
+          All categories
+        </Link>
         <Link href="/offers" className="text-accent hover:underline">
           Offers
         </Link>

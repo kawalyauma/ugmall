@@ -84,7 +84,7 @@ export default async function Home() {
           <Link href="/categories" className="inline-flex items-center gap-1 text-sm font-semibold text-brand-700">View all <ArrowRight className="size-4" /></Link>
         </div>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          {top.map((c, index) => (
+          {top.slice(0, 8).map((c, index) => (
             <Link key={c.id} href={`/c/${c.slug}`} className={`group relative min-h-36 overflow-hidden rounded-3xl bg-gradient-to-br p-4 shadow-sm ring-1 ring-black/5 transition hover:-translate-y-1 hover:shadow-xl ${categoryStyles[index % categoryStyles.length]}`}>
               {c.image && <img src={c.image} alt="" className="absolute inset-0 size-full object-cover opacity-25 transition duration-500 group-hover:scale-105" />}
               <div className="absolute -bottom-8 -right-8 size-28 rounded-full bg-white/40" />
