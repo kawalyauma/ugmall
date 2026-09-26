@@ -19,7 +19,7 @@ function mockFetch(responses: Record<string, unknown>) {
 const base = { username: "api-user", password: "api-pass", environment: "sandbox" as const, callbackSecret: "a-very-long-callback-secret" };
 
 describe("SsentezoWalletProvider", () => {
-  it("initiates a deposit with local msisdn, basic auth and signed callbacks", async () => {
+  it("initiates a deposit with international msisdn, basic auth and signed callbacks", async () => {
     const { fn, calls } = mockFetch({
       deposit: { response: "OK", data: { externalReference: "PAY-1", transactionStatus: "PENDING", ssentezoWalletReference: "SW123" } },
     });
@@ -40,7 +40,7 @@ describe("SsentezoWalletProvider", () => {
     const call = calls[0]!;
     expect(call.url).toBe("https://devwallet.ssentezo.com/api/deposit");
     expect(call.auth).toBe(`Basic ${Buffer.from("api-user:api-pass").toString("base64")}`);
-    expect(call.fields.msisdn).toBe("0772123456");
+    expect(call.fields.msisdn).toBe("256772123456");
     expect(call.fields.amount).toBe("118000");
     expect(call.fields.currency).toBe("UGX");
     const cb = new URL(call.fields.success_callback!);

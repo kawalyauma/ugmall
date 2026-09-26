@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { toLocalUgPhone, type PaymentMethod } from "@ugmall/shared";
+import { normalizeUgPhone, toLocalUgPhone, type PaymentMethod } from "@ugmall/shared";
 import {
   PaymentError,
   type InitiatePaymentRequest,
@@ -141,9 +141,11 @@ export class SsentezoWalletProvider implements PaymentProvider {
   async initiatePayment(req: InitiatePaymentRequest): Promise<InitiatePaymentResult> {
     if (!this.methods.includes(req.method)) throw new PaymentError(`Ssentezo does not handle ${req.method}`, "NOT_SUPPORTED");
     if (!req.msisdn) throw new PaymentError("A mobile money number is required", "INVALID_REQUEST");
+    const msisdn = normalizeUgPhone(req.msisdn);
+    if (!msisdn) throw new PaymentError("A valid Ugandan mobile money number is required", "INVALID_REQUEST");
     if (req.amount < 500) throw new PaymentError("Minimum mobile money amount is UGX 500", "INVALID_REQUEST");
     const env = await this.post("deposit", {
-      msisdn: toLocalUgPhone(req.msisdn),
+      msisdn,
       amount: req.amount,
       currency: "UGX",
       reason: req.description.slice(0, 100),
@@ -186,8 +188,10 @@ export class SsentezoWalletProvider implements PaymentProvider {
 
   async refundPayment(req: RefundRequest): Promise<RefundResult> {
     if (!req.msisdn) throw new PaymentError("Refund needs the customer's mobile money number", "INVALID_REQUEST");
+    const msisdn = normalizeUgPhone(req.msisdn);
+    if (!msisdn) throw new PaymentError("Refund needs a valid Ugandan mobile money number", "INVALID_REQUEST");
     const env = await this.post("withdraw", {
-      msisdn: toLocalUgPhone(req.msisdn),
+      msisdn,
       amount: req.amount,
       currency: "UGX",
       reason: `Refund: ${req.reason}`.slice(0, 100),
@@ -228,7 +232,9 @@ export class SsentezoWalletProvider implements PaymentProvider {
 
   /** Returns the registered names on a mobile money number (useful before refunds). */
   async verifyMsisdn(msisdn: string): Promise<{ firstName?: string; lastName?: string } | null> {
-    const env = await this.post("msisdn-verification", { msisdn: toLocalUgPhone(msisdn) });
+    const normalized = normalizeUgPhone(msisdn);
+    if (!normalized) throw new PaymentError("A valid Ugandan mobile money number is required", "INVALID_REQUEST");
+    const env = await this.post("msisdn-verification", { msisdn: normalized });
     if (!env.data) return null;
     return { firstName: env.data.FirstName as string | undefined, lastName: env.data.Surname as string | undefined };
   }
