@@ -1,47 +1,75 @@
 import Link from "next/link";
-import { ArrowRight, LayoutGrid } from "lucide-react";
+import { ArrowRight, ChevronRight, FolderTree, Layers3 } from "lucide-react";
 import { serverGet } from "@/lib/api";
 import type { Category } from "@/lib/types";
 
 export const metadata = { title: "Categories" };
 
+function CategoryChildren({ parentId, categories, depth = 0 }: { parentId: string; categories: Category[]; depth?: number }) {
+  const children = categories.filter((category) => category.parentId === parentId);
+  if (!children.length) return null;
+  return (
+    <ul className={`${depth ? "mt-2" : "mt-4"} space-y-1.5 border-l border-gray-200 pl-4`}>
+      {children.map((category) => {
+        const childCount = categories.filter((candidate) => candidate.parentId === category.id).length;
+        return (
+          <li key={category.id}>
+            <Link href={`/c/${category.slug}`} className="group flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm text-gray-700 transition hover:bg-brand-50 hover:text-brand-800">
+              <ChevronRight className="size-3.5 shrink-0 text-gray-300 transition group-hover:translate-x-0.5 group-hover:text-brand-600" />
+              <span className="font-semibold">{category.name}</span>
+              {childCount > 0 && <span className="ml-auto rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-500">{childCount}</span>}
+            </Link>
+            <CategoryChildren parentId={category.id} categories={categories} depth={depth + 1} />
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 export default async function Categories() {
-  const cats = await serverGet<Category[]>("/store/categories");
-  const top = cats.filter((c) => !c.parentId);
-  const styles = ["from-teal-50 to-emerald-100", "from-amber-50 to-orange-100", "from-sky-50 to-cyan-100", "from-rose-50 to-pink-100"];
+  const categories = await serverGet<Category[]>("/store/categories");
+  const roots = categories.filter((category) => !category.parentId);
   return (
     <div className="container-page py-8 md:py-12">
-      <div className="mb-8 max-w-2xl">
-        <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-brand-100 px-3 py-1 text-xs font-bold uppercase tracking-widest text-brand-800"><LayoutGrid className="size-3.5" /> Collections</div>
-        <h1 className="text-3xl font-black tracking-tight md:text-4xl">Browse every category</h1>
-        <p className="mt-2 text-gray-600">Find your next favourite piece, then order online or chat with us on WhatsApp.</p>
+      <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm md:flex md:items-end md:justify-between md:p-8">
+        <div className="max-w-2xl">
+          <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-brand-100 px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-brand-800"><FolderTree className="size-3.5" /> Catalogue directory</div>
+          <h1 className="text-3xl font-black tracking-tight md:text-4xl">Shop by category</h1>
+          <p className="mt-2 leading-6 text-gray-600">Explore the full catalogue from departments down to each specialised collection.</p>
+        </div>
+        <div className="mt-5 flex items-center gap-3 rounded-2xl bg-gray-50 px-4 py-3 md:mt-0">
+          <div className="grid size-10 place-items-center rounded-xl bg-white text-brand-700 shadow-sm"><Layers3 className="size-5" /></div>
+          <div><div className="text-2xl font-black">{categories.length}</div><div className="text-xs text-gray-500">active categories</div></div>
+        </div>
       </div>
-      <div className="grid gap-4 md:grid-cols-2">
-        {top.map((c, index) => {
-          const children = cats.filter((x) => x.parentId === c.id);
+
+      <div className="mt-6 grid items-start gap-4 md:grid-cols-2">
+        {roots.map((category) => {
+          const childCount = categories.filter((candidate) => candidate.parentId === category.id).length;
           return (
-            <div key={c.id} className={`relative overflow-hidden rounded-3xl bg-gradient-to-br p-5 shadow-sm ring-1 ring-black/5 ${styles[index % styles.length]}`}>
-              {c.image && <img src={c.image} alt="" className="absolute inset-0 size-full object-cover opacity-15" />}
-              <Link href={`/c/${c.slug}`} className="relative flex items-center justify-between text-xl font-black">
-                {c.name} <span className="inline-flex items-center gap-1 rounded-full bg-white/80 px-3 py-1.5 text-xs font-bold text-brand-800">Shop all <ArrowRight className="size-3.5" /></span>
-              </Link>
-              {children.length > 0 && (
-                <div className="relative mt-5 flex flex-wrap gap-2">
-                  {children.map((ch) => (
-                    <Link key={ch.id} href={`/c/${ch.slug}`} className="rounded-full bg-white/75 px-3 py-1.5 text-sm font-medium shadow-sm transition hover:bg-white">
-                      {ch.name}
-                    </Link>
-                  ))}
+            <section key={category.id} className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm transition hover:border-brand-200 hover:shadow-md">
+              <div className="flex items-center gap-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white p-5">
+                <div className="grid size-14 shrink-0 place-items-center overflow-hidden rounded-2xl bg-brand-100 text-xl font-black text-brand-800">
+                  {category.image ? <img src={category.image} alt="" className="size-full object-cover" /> : category.name[0]}
                 </div>
-              )}
-            </div>
+                <div className="min-w-0 flex-1">
+                  <Link href={`/c/${category.slug}`} className="text-xl font-black tracking-tight text-gray-900 hover:text-brand-700">{category.name}</Link>
+                  <p className="mt-1 line-clamp-2 text-sm text-gray-500">{category.description || (childCount ? `${childCount} collections` : "Browse all products in this category")}</p>
+                </div>
+                <Link href={`/c/${category.slug}`} aria-label={`Shop all ${category.name}`} className="grid size-9 shrink-0 place-items-center rounded-full border border-gray-200 bg-white text-brand-700 transition hover:border-brand-300 hover:bg-brand-50"><ArrowRight className="size-4" /></Link>
+              </div>
+              <div className="p-5">
+                {childCount > 0 ? <CategoryChildren parentId={category.id} categories={categories} /> : <Link href={`/c/${category.slug}`} className="inline-flex items-center gap-1 text-sm font-bold text-brand-700">View products <ArrowRight className="size-4" /></Link>}
+              </div>
+            </section>
           );
         })}
-        {top.length === 0 && (
-          <div className="rounded-3xl border border-dashed border-brand-200 bg-gradient-to-br from-brand-50 to-white p-10 text-center md:col-span-2">
-            <div className="mx-auto grid size-14 place-items-center rounded-2xl bg-white text-brand-700 shadow-sm"><LayoutGrid className="size-6" /></div>
-            <h2 className="mt-4 text-xl font-black">New collections are on the way</h2>
-            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-gray-600">We’re curating the catalogue. Chat with us on WhatsApp if you already know what you’re looking for.</p>
+        {roots.length === 0 && (
+          <div className="rounded-3xl border border-dashed border-gray-300 bg-white p-12 text-center md:col-span-2">
+            <FolderTree className="mx-auto size-8 text-gray-300" />
+            <h2 className="mt-4 text-lg font-bold">The catalogue is being organised</h2>
+            <p className="mt-1 text-sm text-gray-500">Categories will appear here once they are available.</p>
           </div>
         )}
       </div>

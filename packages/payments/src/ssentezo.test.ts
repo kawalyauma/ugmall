@@ -77,6 +77,16 @@ describe("SsentezoWalletProvider", () => {
     expect(calls.at(-1)!.url).toBe("https://devwallet.ssentezo.com/api/get_status/PAY-3");
   });
 
+  it("does not present the merchant description as a decline reason", async () => {
+    const { fn } = mockFetch({
+      "get_status/PAY-4": { response: "OK", data: { transactionStatus: "FAILED", reason: "Order ORD-2026-000001", amount: 5000 } },
+    });
+    const p = new SsentezoWalletProvider({ ...base, fetch: fn });
+    const result = await p.verifyPayment("PAY-4");
+    expect(result.status).toBe("failed");
+    expect(result.failureReason).toBe("Mobile Money payment was declined or not completed. Please try again.");
+  });
+
   it("maps statuses conservatively", () => {
     expect(mapSsentezoStatus("SUCCEEDED")).toBe("succeeded");
     expect(mapSsentezoStatus("FAILED")).toBe("failed");

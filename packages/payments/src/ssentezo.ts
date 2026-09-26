@@ -130,6 +130,14 @@ export class SsentezoWalletProvider implements PaymentProvider {
     return undefined;
   }
 
+  private failedTransactionMessage(env: SsentezoEnvelope, data: Record<string, unknown>): string {
+    // `reason` is the merchant-supplied payment description (for example,
+    // "Order ORD-...") and is not a provider decline reason.
+    const candidates = [data.failureReason, data.failure_reason, data.errorMessage, data.error_message, data.message, env.error?.message, env.message];
+    const detail = candidates.find((value) => typeof value === "string" && value.trim()) as string | undefined;
+    return detail?.trim() || "Mobile Money payment was declined or not completed. Please try again.";
+  }
+
   async initiatePayment(req: InitiatePaymentRequest): Promise<InitiatePaymentResult> {
     if (!this.methods.includes(req.method)) throw new PaymentError(`Ssentezo does not handle ${req.method}`, "NOT_SUPPORTED");
     if (!req.msisdn) throw new PaymentError("A mobile money number is required", "INVALID_REQUEST");
@@ -164,13 +172,14 @@ export class SsentezoWalletProvider implements PaymentProvider {
       // Unknown reference / transient error: keep it pending, the poller retries.
       return { externalReference, status: "pending", failureReason: err, raw: env };
     }
+    const status = mapSsentezoStatus(data.transactionStatus ?? data.status);
     return {
       externalReference,
-      status: mapSsentezoStatus(data.transactionStatus ?? data.status),
+      status,
       amount: data.amount !== undefined ? Math.round(Number(data.amount)) : undefined,
       providerReference: (data.ssentezoWalletReference as string) || undefined,
       financialTransactionId: (data.financialTransactionId as string) || (data.network_ref as string) || undefined,
-      failureReason: (data.reason as string) && mapSsentezoStatus(data.transactionStatus) === "failed" ? String(data.reason) : undefined,
+      failureReason: status === "failed" ? this.failedTransactionMessage(env, data) : undefined,
       raw: env,
     };
   }
