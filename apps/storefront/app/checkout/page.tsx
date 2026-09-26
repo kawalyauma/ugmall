@@ -7,7 +7,6 @@ import { Clock, Lock } from "lucide-react";
 import {
   DELIVERY_METHOD_LABELS,
   PAYMENT_METHOD_LABELS,
-  UG_DISTRICTS,
   detectNetwork,
   formatUGX,
   isValidUgPhone,
@@ -15,7 +14,7 @@ import {
   type PaymentMethod,
 } from "@ugmall/shared";
 import { api, ApiError } from "@/lib/api";
-import type { Zone } from "@/lib/types";
+import { AreaPicker, type AreaInfo } from "@/components/area-picker";
 import { useStore } from "@/components/providers";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
@@ -26,6 +25,7 @@ interface Quote {
   deliveryFee: number;
   deliveryDescription: string;
   deliveryIsFinal: boolean;
+  zone: { name: string; etaText: string | null } | null;
   discount: number;
   couponError: string | null;
   total: number;
@@ -36,7 +36,7 @@ const SAVED_KEY = "ugmall.checkout";
 export default function CheckoutPage() {
   const router = useRouter();
   const { cart, settings, customer, refreshCart, toast } = useStore();
-  const [zones, setZones] = useState<Zone[]>([]);
+  const [areaInfo, setAreaInfo] = useState<AreaInfo | null>(null);
   const [hold, setHold] = useState<{ id: string; expiresAt: number } | null>(null);
   const [holdError, setHoldError] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
@@ -47,10 +47,9 @@ export default function CheckoutPage() {
     customerName: "",
     phone: "",
     altPhone: "",
-    district: "Kampala",
-    area: "",
+    locationId: "",
+    nearbyPlace: "",
     address: "",
-    deliveryZoneId: "",
     deliveryMethod: "boda" as DeliveryMethod,
     paymentMethod: "mtn_momo" as PaymentMethod,
     paymentPhone: "",
@@ -62,17 +61,15 @@ export default function CheckoutPage() {
   // restore last-used details (saved on this phone only)
   useEffect(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem(SAVED_KEY) ?? "null");
-      if (saved) setF((s) => ({ ...s, ...saved, couponCode: "", notes: "" }));
+      const saved = JSON.parse(localStorage.getItem(SAVED_KEY) ?? "null") as Record<string, unknown> | null;
+      // only restore fields this form still has (older versions saved a zone id)
+      if (saved) setF((s) => ({ ...s, ...Object.fromEntries(Object.entries(saved).filter(([k, v]) => k in s && typeof v === "string")), couponCode: "", notes: "" }));
     } catch {}
   }, []);
   useEffect(() => {
     if (customer) setF((s) => ({ ...s, customerName: s.customerName || customer.name, phone: s.phone || `0${customer.phone.slice(3)}` }));
   }, [customer]);
 
-  useEffect(() => {
-    api<Zone[]>("/store/delivery-zones").then(setZones, () => {});
-  }, []);
 
   // hold stock while the customer fills the form
   const reserve = async () => {
@@ -98,7 +95,7 @@ export default function CheckoutPage() {
   }, []);
   const secondsLeft = hold ? Math.max(0, Math.floor((hold.expiresAt - now) / 1000)) : 0;
 
-  const zone = zones.find((z) => z.id === f.deliveryZoneId);
+  const zone = areaInfo?.zone ?? null;
   const methods = useMemo<DeliveryMethod[]>(() => {
     const m = new Set<DeliveryMethod>(["pickup"]);
     for (const x of zone?.methods ?? ["boda"]) m.add(x as DeliveryMethod);
@@ -117,14 +114,14 @@ export default function CheckoutPage() {
 
   // live totals
   useEffect(() => {
-    if (!cart.count || (f.deliveryMethod !== "pickup" && !f.deliveryZoneId)) return setQuote(null);
+    if (!cart.count || (f.deliveryMethod !== "pickup" && !f.locationId)) return setQuote(null);
     const t = setTimeout(() => {
       api<Quote>("/store/checkout/quote", {
-        body: { deliveryZoneId: f.deliveryZoneId || null, deliveryMethod: f.deliveryMethod, couponCode: f.couponCode || null, phone: isValidUgPhone(f.phone) ? f.phone : null },
+        body: { locationId: f.locationId ? Number(f.locationId) : null, deliveryMethod: f.deliveryMethod, couponCode: f.couponCode || null, phone: isValidUgPhone(f.phone) ? f.phone : null },
       }).then(setQuote, (e) => toast((e as Error).message));
     }, 350);
     return () => clearTimeout(t);
-  }, [cart.count, cart.subtotal, f.deliveryZoneId, f.deliveryMethod, f.couponCode, f.phone, toast]);
+  }, [cart.count, cart.subtotal, f.locationId, f.deliveryMethod, f.couponCode, f.phone, toast]);
 
   const isMomo = f.paymentMethod === "mtn_momo" || f.paymentMethod === "airtel_money";
   const payPhone = f.paymentPhone || f.phone;
@@ -139,9 +136,8 @@ export default function CheckoutPage() {
     if (f.customerName.trim().length < 2) e.customerName = "Enter your name";
     if (!isValidUgPhone(f.phone)) e.phone = "Enter a valid phone, e.g. 0772 123 456";
     if (f.altPhone && !isValidUgPhone(f.altPhone)) e.altPhone = "Invalid phone number";
-    if (f.area.trim().length < 2) e.area = "Enter your area, e.g. Ntinda";
-    if (f.address.trim().length < 2) e.address = "Tell us a landmark";
-    if (f.deliveryMethod !== "pickup" && !f.deliveryZoneId) e.deliveryZoneId = "Choose a delivery area";
+    if (f.deliveryMethod !== "pickup" && !f.locationId) e.locationId = "Choose at least your district";
+    if (f.deliveryMethod !== "pickup" && f.address.trim().length < 2) e.address = "Tell us a landmark so the rider can find you";
     if (isMomo && f.paymentPhone && !isValidUgPhone(f.paymentPhone)) e.paymentPhone = "Invalid Mobile Money number";
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -154,7 +150,14 @@ export default function CheckoutPage() {
       const { couponCode, notes, ...toSave } = f;
       localStorage.setItem(SAVED_KEY, JSON.stringify({ ...toSave, paymentPhone: "" }));
       const r = await api<{ orderNumber: string; trackingToken: string }>("/store/checkout/place", {
-        body: { ...f, reservationId: hold?.id, deliveryZoneId: f.deliveryZoneId || undefined, couponCode, notes },
+        body: {
+          ...f,
+          reservationId: hold?.id,
+          locationId: f.locationId ? Number(f.locationId) : undefined,
+          address: f.deliveryMethod === "pickup" && !f.address.trim() ? "Pickup at shop" : f.address,
+          couponCode,
+          notes,
+        },
       });
       await refreshCart();
       router.push(`/orders/${r.orderNumber}?t=${r.trackingToken}&new=1`);
@@ -220,30 +223,33 @@ export default function CheckoutPage() {
 
         <section className="space-y-3 rounded-2xl border border-gray-200 bg-white p-4">
           <h2 className="font-semibold">Delivery</h2>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="District">
-              <Select value={f.district} onChange={(e) => set("district", e.target.value)}>
-                {UG_DISTRICTS.map((d) => (
-                  <option key={d}>{d}</option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="Area / village" error={errors.area}>
-              <Input value={f.area} onChange={(e) => set("area", e.target.value)} placeholder="e.g. Ntinda, Kisaasi" />
-            </Field>
-          </div>
-          <Field label="Address / landmark" error={errors.address} hint="e.g. Near Capital Shoppers, blue gate">
-            <Input value={f.address} onChange={(e) => set("address", e.target.value)} autoComplete="street-address" />
+          <AreaPicker
+            value={f.locationId ? Number(f.locationId) : null}
+            error={errors.locationId}
+            onChange={(info) => {
+              setAreaInfo(info);
+              set("locationId", info ? String(info.id) : "");
+            }}
+          />
+          {areaInfo && (
+            <div className="rounded-xl bg-brand-50 p-3 text-sm text-brand-800">
+              <div className="font-medium">{areaInfo.path}</div>
+              {areaInfo.zone ? (
+                <div>
+                  Delivery: {areaInfo.zone.isCalculated ? "calculated by weight (bus parcel / courier)" : formatUGX(areaInfo.zone.fee ?? 0)}
+                  {areaInfo.zone.etaText ? ` · ${areaInfo.zone.etaText}` : ""}
+                  {areaInfo.moreSpecificMayDiffer && <span className="block text-xs text-amber-700">Choose your division and village for the exact fee.</span>}
+                </div>
+              ) : (
+                <div className="text-amber-700">We don't deliver here yet — choose Pickup or chat with us on WhatsApp.</div>
+              )}
+            </div>
+          )}
+          <Field label="Nearby place or exact location (if your place isn't listed)" hint="e.g. Kisaasi, near Total petrol station">
+            <Input value={f.nearbyPlace} onChange={(e) => set("nearbyPlace", e.target.value)} maxLength={200} />
           </Field>
-          <Field label="Delivery area" error={errors.deliveryZoneId}>
-            <Select value={f.deliveryZoneId} onChange={(e) => set("deliveryZoneId", e.target.value)}>
-              <option value="">Choose…</option>
-              {zones.map((z) => (
-                <option key={z.id} value={z.id}>
-                  {z.name} — {z.isCalculated ? "calculated" : formatUGX(z.fee ?? 0)} {z.etaText ? `(${z.etaText})` : ""}
-                </option>
-              ))}
-            </Select>
+          <Field label={`Landmark / directions${f.deliveryMethod === "pickup" ? " (optional)" : ""}`} error={errors.address} hint="e.g. Blue gate opposite Mukwano shop, 2nd floor">
+            <Input value={f.address} onChange={(e) => set("address", e.target.value)} autoComplete="street-address" maxLength={300} />
           </Field>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {methods.map((m) => (

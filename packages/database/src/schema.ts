@@ -15,6 +15,7 @@ import {
   uniqueIndex,
   uuid,
   date,
+  serial,
 } from "drizzle-orm/pg-core";
 import {
   COUPON_TYPES,
@@ -326,6 +327,8 @@ export const customerAddresses = pgTable("customer_addresses", {
   district: text("district").notNull(),
   area: text("area").notNull(),
   address: text("address").notNull(),
+  locationId: integer("location_id"),
+  nearbyPlace: text("nearby_place"),
   deliveryZoneId: uuid("delivery_zone_id"),
   isDefault: boolean("is_default").notNull().default(false),
   createdAt: createdAt(),
@@ -364,6 +367,36 @@ export const deliveryZones = pgTable("delivery_zones", {
   isActive: boolean("is_active").notNull().default(true),
   createdAt: createdAt(),
 });
+
+/**
+ * Uganda administrative areas: region > district > division (sub-county /
+ * town council) > parish ("area", e.g. Ntinda) > village. Delivery fees come
+ * from the nearest area (walking up the tree) that has a delivery zone.
+ */
+export const LOCATION_LEVELS = ["region", "district", "division", "parish", "village"] as const;
+export const locationLevelEnum = pgEnum("location_level", LOCATION_LEVELS);
+
+export const locations = pgTable(
+  "locations",
+  {
+    id: serial("id").primaryKey(),
+    parentId: integer("parent_id"),
+    level: locationLevelEnum("level").notNull(),
+    name: text("name").notNull(),
+    /** "Central › Kampala › Nakawa › Ntinda" — denormalised for search results and orders. */
+    path: text("path").notNull(),
+    deliveryZoneId: uuid("delivery_zone_id").references(() => deliveryZones.id, { onDelete: "set null" }),
+    /** Added by staff (not from the official list). */
+    isCustom: boolean("is_custom").notNull().default(false),
+    isActive: boolean("is_active").notNull().default(true),
+  },
+  (t) => [
+    index("locations_parent_idx").on(t.parentId),
+    index("locations_zone_idx").on(t.deliveryZoneId),
+    index("locations_name_idx").on(sql`lower(${t.name})`),
+    uniqueIndex("locations_unique_child").on(t.parentId, t.level, sql`lower(${t.name})`),
+  ],
+);
 
 /* ---------------------------------------------------------------- promotions */
 
@@ -418,6 +451,11 @@ export const orders = pgTable(
     district: text("district").notNull(),
     area: text("area").notNull(),
     address: text("address").notNull(),
+    /** Chosen area in the location tree and its full path at order time. */
+    locationId: integer("location_id"),
+    locationPath: text("location_path"),
+    /** Place the customer typed when theirs was not in the list ("Opposite Kisaasi Total"). */
+    nearbyPlace: text("nearby_place"),
     deliveryZoneId: uuid("delivery_zone_id").references(() => deliveryZones.id),
     deliveryMethod: deliveryMethodEnum("delivery_method").notNull(),
     paymentMethod: paymentMethodEnum("payment_method").notNull(),

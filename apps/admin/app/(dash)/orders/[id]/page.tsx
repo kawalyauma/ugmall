@@ -37,6 +37,8 @@ interface Detail {
   district: string;
   area: string;
   address: string;
+  locationPath: string | null;
+  nearbyPlace: string | null;
   notes: string | null;
   staffNotes: string | null;
   subtotal: number;
@@ -243,7 +245,11 @@ export default function OrderDetail({ params }: { params: Promise<{ id: string }
               <a className="flex items-center gap-1 text-brand-700" href={`tel:+${o.phone}`}><Phone className="size-3.5" /> {prettyUgPhone(o.phone)}</a>
               {o.altPhone && <div>Alt: {prettyUgPhone(o.altPhone)}</div>}
               <a className="flex items-center gap-1 text-green-700" href={`https://wa.me/${o.phone}`} target="_blank" rel="noreferrer"><MessageCircle className="size-3.5" /> WhatsApp</a>
-              <div className="pt-2 text-gray-600">{o.address}<br />{o.area}, {o.district}</div>
+              <div className="pt-2 text-gray-600">
+                {o.locationPath ?? `${o.area}, ${o.district}`}
+                {o.nearbyPlace && <div>Near: <b>{o.nearbyPlace}</b></div>}
+                <div>Landmark: {o.address}</div>
+              </div>
               <div className="pt-2">Delivery: <b>{DELIVERY_METHOD_LABELS[o.deliveryMethod]}</b></div>
               <div>Payment: <b>{PAYMENT_METHOD_LABELS[o.paymentMethod]}</b> <StatusBadge status={o.paymentStatus} /></div>
               {o.notes && <div className="mt-2 rounded-lg bg-amber-50 p-2">📝 {o.notes}</div>}

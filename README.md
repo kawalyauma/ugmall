@@ -33,6 +33,26 @@ ugmall/
 
 ---
 
+## Delivery areas & fees (no maps needed)
+
+Customers choose **Region → District → Division/Sub-county → Village/Area → Cell** (or search "Ntinda",
+"Kansanga", "Mbarara" to fill all of it in one tap), then type a **landmark**. If their exact place isn't
+listed they type it under **Nearby place**.
+
+- All of Uganda is included: 4 regions, 135 districts, 2,115 divisions/sub-counties, 10,359 parishes and
+  71,037 villages ([kusaasira/uganda-geo-data](https://github.com/kusaasira/uganda-geo-data), MIT), loaded
+  automatically by `seed-locations` on deploy.
+- **Fees come from zones attached to areas**, inherited downwards: put a zone on a district for its default
+  price, then override a division or village. E.g. *Kampala → 6,000*, *Nakawa › Ntinda → 7,000*,
+  *regions → Upcountry (by weight, bus parcel/courier)*. The customer sees the fee as soon as they pick an area;
+  if they stop at "Kampala" while parts of Kampala cost more, they're asked to choose the exact area.
+- **Admin → Deliveries → Delivery areas & fees**: browse or search areas, see what a customer would pay and
+  where it's inherited from, set/clear zones, add areas missing from the official list (popular neighbourhood
+  names like Kitintale or Najjera are not official parishes), and review places customers typed.
+- Orders, the rider app and invoices show the full area path, the typed nearby place and the landmark.
+
+---
+
 ## Importing products (Jumia / Kilimall sheets or your own)
 
 **Admin → Products → Import** (or `pnpm --filter @ugmall/api import-products -- file.xlsx --dry-run`).

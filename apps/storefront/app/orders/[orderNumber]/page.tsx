@@ -23,6 +23,8 @@ interface Tracked {
   district: string;
   area: string;
   address: string;
+  locationPath: string | null;
+  nearbyPlace: string | null;
   subtotal: number;
   deliveryFee: number;
   discount: number;
@@ -222,7 +224,10 @@ export default function OrderPage({ params }: { params: Promise<{ orderNumber: s
           </div>
         </dl>
         <div className="mt-3 border-t border-gray-100 pt-3 text-sm text-gray-600">
-          Deliver to: {order.address}, {order.area}, {order.district} · {order.phone}
+          Deliver to: {order.locationPath ?? `${order.area}, ${order.district}`}
+          {order.nearbyPlace && <> · {order.nearbyPlace}</>}
+          <br />
+          Landmark: {order.address} · {order.phone}
         </div>
       </div>
 

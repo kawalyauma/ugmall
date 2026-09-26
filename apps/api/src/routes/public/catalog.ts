@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { and, asc, desc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { brands, categories, deliveryZones, mediaFiles, promotions, reviews } from "@ugmall/database";
+import { childLocations, LEVEL_LABELS, resolveLocation, searchLocations } from "@ugmall/delivery";
 import { ApiError, pagination } from "../../lib/http";
 import { listProducts, productDetail } from "../../lib/catalog";
 import { getPublicSettings } from "../../lib/settings";
@@ -151,4 +152,38 @@ catalogRoutes.get("/delivery-zones", async (c) => {
     .orderBy(asc(deliveryZones.sortOrder), asc(deliveryZones.name));
   c.header("Cache-Control", "public, max-age=60");
   return c.json(zones);
+});
+
+/* ------------------------------------------------------------- delivery areas */
+
+/** Region → District → Division → Village/Area, one level at a time (cascading dropdowns). */
+catalogRoutes.get("/locations", async (c) => {
+  const { db } = c.get("container");
+  const parent = c.req.query("parent");
+  const parentId = parent && /^\d+$/.test(parent) ? Number(parent) : null;
+  c.header("Cache-Control", "public, max-age=300");
+  return c.json(await childLocations(db, parentId));
+});
+
+catalogRoutes.get("/locations/search", async (c) => {
+  const { db } = c.get("container");
+  const hits = await searchLocations(db, c.req.query("q") ?? "", 15);
+  return c.json(hits.map((h) => ({ ...h, levelLabel: LEVEL_LABELS[h.level] })));
+});
+
+/** Full chain for an area (to prefill dropdowns) and the delivery zone that applies. */
+catalogRoutes.get("/locations/:id", async (c) => {
+  const { db } = c.get("container");
+  const id = Number(c.req.param("id"));
+  if (!Number.isInteger(id) || id <= 0) throw new ApiError(404, "Area not found");
+  const r = await resolveLocation(db, id);
+  if (!r) throw new ApiError(404, "Area not found");
+  return c.json({
+    id: r.location.id,
+    name: r.location.name,
+    path: r.location.path,
+    chain: r.chain.map((l) => ({ id: l.id, name: l.name, level: l.level })),
+    zone: r.zone ? { id: r.zone.id, name: r.zone.name, fee: r.zone.fee, isCalculated: r.zone.isCalculated, etaText: r.zone.etaText, methods: r.zone.methods } : null,
+    moreSpecificMayDiffer: r.moreSpecificMayDiffer,
+  });
 });

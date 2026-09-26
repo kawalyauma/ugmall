@@ -25,6 +25,7 @@ function mapDomainError(err: unknown): never {
 export { mapDomainError };
 
 const quoteSchema = z.object({
+  locationId: z.number().int().positive().optional().nullable(),
   deliveryZoneId: z.string().uuid().optional().nullable(),
   deliveryMethod: z.enum(DELIVERY_METHODS),
   couponCode: z.string().max(40).optional().nullable(),
@@ -38,6 +39,7 @@ checkoutRoutes.post("/quote", async (c) => {
   try {
     const q = await c.get("container").orders.quote({
       lines,
+      locationId: input.locationId,
       deliveryZoneId: input.deliveryZoneId,
       deliveryMethod: input.deliveryMethod,
       couponCode: input.couponCode,
@@ -49,6 +51,8 @@ checkoutRoutes.post("/quote", async (c) => {
       deliveryFee: q.delivery.fee,
       deliveryDescription: q.delivery.description,
       deliveryIsFinal: q.delivery.isFinal,
+      zone: q.zone ? { name: q.zone.name, etaText: q.zone.etaText, methods: q.zone.methods } : null,
+      locationPath: q.location?.location.path ?? null,
       discount: q.discount,
       couponError: q.couponError,
       total: q.total,
@@ -156,6 +160,8 @@ trackingRoutes.get("/:orderNumber", async (c) => {
     district: order.district,
     area: order.area,
     address: order.address,
+    locationPath: order.locationPath,
+    nearbyPlace: order.nearbyPlace,
     subtotal: order.subtotal,
     deliveryFee: order.deliveryFee,
     discount: order.discount,

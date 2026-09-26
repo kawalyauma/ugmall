@@ -10,6 +10,8 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@ugmall/shared": "workspace:*"
+    "@ugmall/shared": "workspace:*",
+    "@ugmall/database": "workspace:*",
+    "drizzle-orm": "^0.45.0"
   }
 }

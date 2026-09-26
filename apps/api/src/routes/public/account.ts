@@ -79,6 +79,8 @@ accountRoutes.use("/addresses/*", requireCustomer);
 accountRoutes.use("/addresses", requireCustomer);
 const addressSchema = z.object({
   label: z.string().max(40).optional(),
+  locationId: z.number().int().positive().optional().nullable(),
+  nearbyPlace: z.string().max(200).optional().nullable(),
   district: z.string().min(2).max(80),
   area: z.string().min(2).max(120),
   address: z.string().min(2).max(300),

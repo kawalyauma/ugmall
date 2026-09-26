@@ -31,7 +31,7 @@ owner's own server with Docker; there is no dependency on cloud object storage.
 | `packages/payments` | `PaymentProvider` interface, **Ssentezo Wallet**, Cash on Delivery, Pay on Pickup, dev fake provider, registry |
 | `packages/inventory` | Variant-level stock ledger with audit trail, Redis checkout reservations |
 | `packages/orders` | Pricing, coupons, order placement, lifecycle transitions, payments application, riders, refunds, returns |
-| `packages/delivery` | Delivery zone fee calculation |
+| `packages/delivery` | Delivery fee calculation, Uganda area tree (region › district › division › parish › village), zone resolution by nearest area with a zone, bundled area data |
 | `packages/notifications` | WhatsApp Cloud API provider, message templates, notification log |
 | `packages/reporting` | Report queries, dashboard, CSV/XLSX/PDF export, invoices |
 | `packages/importer` | Spreadsheet reader (xlsx/csv), Jumia seller-center mapping (variation rows → products + variants, brands, category tree), idempotent apply |

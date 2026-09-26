@@ -40,7 +40,7 @@ export default function Deliveries() {
 
   return (
     <>
-      <PageHeader title="Deliveries" />
+      <PageHeader title="Deliveries" actions={<Link href="/deliveries/areas"><Button size="sm" variant="secondary">Delivery areas & fees</Button></Link>} />
       <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {riders?.map((r) => (
           <Card key={r.id}>
@@ -107,6 +107,7 @@ export default function Deliveries() {
             { header: "Fee", cell: (r) => (r.isCalculated ? `from ${money((r.baseFee as number) ?? 0)} + ${money((r.perKgFee as number) ?? 0)}/kg` : money(r.fee as number)) },
             { header: "ETA", cell: (r) => (r.etaText as string) ?? "" },
             { header: "Methods", cell: (r) => (r.methods as string[]).map((m) => DELIVERY_METHOD_LABELS[m as DeliveryMethod]).join(", ") },
+            { header: "Areas", cell: () => <Link className="text-xs text-brand-700" href="/deliveries/areas" onClick={(e) => e.stopPropagation()}>set areas →</Link> },
             { header: "Active", cell: (r) => (r.isActive ? "✓" : "—") },
           ]}
         />

@@ -3,7 +3,7 @@ import { defineConfig } from "tsup";
 // Bundle the API + worker together with the workspace packages into plain
 // ESM so the production image only needs node_modules for third-party deps.
 export default defineConfig({
-  entry: { server: "src/server.ts", worker: "src/worker.ts", migrate: "src/scripts/migrate.ts", seed: "src/scripts/seed.ts", "create-admin": "src/scripts/create-admin.ts", "import-products": "src/scripts/import-products.ts" },
+  entry: { server: "src/server.ts", worker: "src/worker.ts", migrate: "src/scripts/migrate.ts", seed: "src/scripts/seed.ts", "create-admin": "src/scripts/create-admin.ts", "import-products": "src/scripts/import-products.ts", "seed-locations": "src/scripts/seed-locations.ts" },
   format: ["esm"],
   platform: "node",
   target: "node22",

@@ -1,9 +1,10 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { and, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
-import { deliveries, deliveryZones, orders, roles, staffUsers } from "@ugmall/database";
+import { and, desc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
+import { deliveries, deliveryZones, locations, orders, roles, staffUsers } from "@ugmall/database";
+import { addLocation, assignZone, resolveLocation, searchLocations, zoneCoverage } from "@ugmall/delivery";
 import { DELIVERY_METHODS, DELIVERY_STATUSES, PERMISSIONS } from "@ugmall/shared";
-import { body } from "../../lib/http";
+import { ApiError, body } from "../../lib/http";
 import { audit } from "../../lib/audit";
 import { crudRoutes } from "../../lib/crud";
 import { requirePermission } from "../../middleware/auth";
@@ -95,4 +96,86 @@ adminDeliveryRoutes.post("/deliveries/handover", requirePermission(P.deliveriesM
     .returning({ id: deliveries.id, amount: deliveries.amountCollected });
   await audit(db, c.get("staff").id, "delivery.cash_handover", "delivery", ids.join(","), { total: rows.reduce((s, r) => s + (r.amount ?? 0), 0) });
   return c.json({ updated: rows.length, total: rows.reduce((s, r) => s + (r.amount ?? 0), 0) });
+});
+
+/* ------------------------------------------------------ areas & coverage */
+
+adminDeliveryRoutes.get("/locations", requirePermission(P.ordersView), async (c) => {
+  const { db } = c.get("container");
+  const parent = c.req.query("parent");
+  const parentId = parent && /^\d+$/.test(parent) ? Number(parent) : null;
+  const rows = await db
+    .select({
+      id: locations.id,
+      name: locations.name,
+      level: locations.level,
+      path: locations.path,
+      zoneId: locations.deliveryZoneId,
+      zoneName: deliveryZones.name,
+      isCustom: locations.isCustom,
+      isActive: locations.isActive,
+      children: sql<number>`(select count(*)::int from ${locations} ch where ch.parent_id = ${locations.id})`,
+    })
+    .from(locations)
+    .leftJoin(deliveryZones, eq(deliveryZones.id, locations.deliveryZoneId))
+    .where(parentId === null ? isNull(locations.parentId) : eq(locations.parentId, parentId))
+    .orderBy(locations.name);
+  return c.json(rows);
+});
+
+adminDeliveryRoutes.get("/locations/search", requirePermission(P.ordersView), async (c) => {
+  const hits = await searchLocations(c.get("container").db, c.req.query("q") ?? "", 30);
+  return c.json(hits);
+});
+
+/** Effective zone + fee for an area (what a customer choosing it would pay). */
+adminDeliveryRoutes.get("/locations/:id/resolve", requirePermission(P.ordersView), async (c) => {
+  const r = await resolveLocation(c.get("container").db, Number(c.req.param("id")));
+  if (!r) throw new ApiError(404, "Area not found");
+  return c.json({ path: r.location.path, zone: r.zone, zoneFrom: r.zoneFrom?.path ?? null, moreSpecificMayDiffer: r.moreSpecificMayDiffer, chain: r.chain.map((l) => ({ id: l.id, name: l.name, level: l.level })) });
+});
+
+adminDeliveryRoutes.put("/locations/:id/zone", requirePermission(P.settingsManage), async (c) => {
+  const { zoneId } = await body(c, z.object({ zoneId: z.string().uuid().nullable() }));
+  const { db } = c.get("container");
+  const id = Number(c.req.param("id"));
+  await assignZone(db, id, zoneId);
+  await audit(db, c.get("staff").id, "delivery.coverage", "location", String(id), { zoneId });
+  return c.json({ ok: true });
+});
+
+/** Add an area missing from the official list (e.g. "Kitintale" under Nakawa). */
+adminDeliveryRoutes.post("/locations", requirePermission(P.settingsManage), async (c) => {
+  const input = await body(c, z.object({ parentId: z.number().int().positive(), name: z.string().trim().min(2).max(80) }));
+  const { db } = c.get("container");
+  try {
+    const row = await addLocation(db, input.parentId, input.name);
+    await audit(db, c.get("staff").id, "delivery.add_area", "location", String(row.id), input);
+    return c.json(row, 201);
+  } catch (err) {
+    throw new ApiError(422, (err as Error).message);
+  }
+});
+
+adminDeliveryRoutes.patch("/locations/:id", requirePermission(P.settingsManage), async (c) => {
+  const input = await body(c, z.object({ isActive: z.boolean() }));
+  const { db } = c.get("container");
+  await db.update(locations).set(input).where(eq(locations.id, Number(c.req.param("id"))));
+  return c.json({ ok: true });
+});
+
+/** Every area that has a zone set directly, grouped by zone (the coverage map, as a list). */
+adminDeliveryRoutes.get("/delivery-coverage", requirePermission(P.ordersView), async (c) => {
+  return c.json(await zoneCoverage(c.get("container").db));
+});
+
+/** Places customers typed because theirs wasn't in the list — candidates to add as areas. */
+adminDeliveryRoutes.get("/locations/typed-places", requirePermission(P.ordersView), async (c) => {
+  const { db } = c.get("container");
+  const rows = await db.execute(sql`
+    select lower(trim(nearby_place)) as key, min(nearby_place) as place, min(location_path) as "locationPath", min(location_id) as "locationId",
+           count(*)::int as orders, max(created_at) as "lastOrder"
+    from orders where nearby_place is not null and nearby_place <> '' and created_at > now() - interval '180 days'
+    group by 1 order by orders desc, "lastOrder" desc limit 200`);
+  return c.json(rows);
 });

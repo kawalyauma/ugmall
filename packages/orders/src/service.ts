@@ -21,7 +21,7 @@ import {
   type Payment,
 } from "@ugmall/database";
 import { inventory, type StockReservations } from "@ugmall/inventory";
-import { quoteDelivery } from "@ugmall/delivery";
+import { DeliveryError, quoteDelivery, resolveLocation, type ResolvedLocation } from "@ugmall/delivery";
 import type { PaymentRegistry, VerifyPaymentResult } from "@ugmall/payments";
 import type { NotificationEvent } from "@ugmall/notifications";
 import {
@@ -105,6 +105,7 @@ export class OrderService {
 
   async quote(input: {
     lines: { variantId: string; quantity: number }[];
+    locationId?: number | null;
     deliveryZoneId?: string | null;
     deliveryMethod: CheckoutInput["deliveryMethod"];
     couponCode?: string | null;
@@ -113,10 +114,23 @@ export class OrderService {
     const lines = await priceLines(this.db, input.lines);
     const subtotal = lines.reduce((s, l) => s + l.lineTotal, 0);
     const weight = lines.reduce((s, l) => s + l.weightGrams, 0);
-    const zone = input.deliveryZoneId
-      ? ((await this.db.select().from(deliveryZones).where(eq(deliveryZones.id, input.deliveryZoneId)))[0] ?? null)
-      : null;
+    // Zone comes from the customer's area (nearest zone up the region › district › … tree).
+    // Staff creating orders may still pass a zone explicitly.
+    let location: ResolvedLocation | null = null;
+    let zone: typeof deliveryZones.$inferSelect | null = null;
+    if (input.deliveryZoneId) {
+      zone = (await this.db.select().from(deliveryZones).where(eq(deliveryZones.id, input.deliveryZoneId)))[0] ?? null;
+    } else if (input.locationId && input.deliveryMethod !== "pickup") {
+      location = await resolveLocation(this.db, input.locationId);
+      if (!location) throw new DeliveryError("Please choose your area again");
+      zone = location.zone;
+      if (!zone) throw new DeliveryError(`We don't deliver to ${location.location.name} yet — please contact us on WhatsApp`);
+    }
     const delivery = quoteDelivery({ zone, method: input.deliveryMethod, subtotal, totalWeightGrams: weight });
+    if (location?.moreSpecificMayDiffer && delivery.isFinal) {
+      delivery.isFinal = false;
+      delivery.description += " — choose your exact area for the final fee";
+    }
     let discount = 0;
     let coupon: typeof coupons.$inferSelect | null = null;
     let couponError: string | null = null;
@@ -131,7 +145,7 @@ export class OrderService {
       }
     }
     const total = Math.max(0, subtotal + delivery.fee - discount);
-    return { lines, subtotal, delivery, zone, discount, coupon, couponError, total, weightGrams: weight };
+    return { lines, subtotal, delivery, zone, location, discount, coupon, couponError, total, weightGrams: weight };
   }
 
   private async resolveCoupon(db: DbOrTx, code: string, subtotal: number, deliveryFee: number, phone: string | null) {
@@ -184,6 +198,7 @@ export class OrderService {
 
     const q = await this.quote({
       lines: reservation.items,
+      locationId: input.locationId,
       deliveryZoneId: input.deliveryZoneId,
       deliveryMethod: input.deliveryMethod,
       couponCode: input.couponCode || null,
@@ -219,9 +234,12 @@ export class OrderService {
           phone,
           altPhone,
           email: input.email || null,
-          district: input.district,
-          area: input.area,
+          district: q.location?.district ?? (input.district || (input.deliveryMethod === "pickup" ? "Pickup" : "-")),
+          area: input.nearbyPlace || q.location?.area || input.area || "-",
           address: input.address,
+          locationId: q.location?.location.id ?? input.locationId ?? null,
+          locationPath: q.location?.location.path ?? null,
+          nearbyPlace: input.nearbyPlace || null,
           deliveryZoneId: q.zone?.id ?? null,
           deliveryMethod: input.deliveryMethod,
           paymentMethod: input.paymentMethod,

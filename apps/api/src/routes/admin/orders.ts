@@ -17,7 +17,9 @@ import {
 import { invoicePdf } from "@ugmall/reporting";
 import { signedPrivateUrl } from "@ugmall/storage";
 import {
-  checkoutSchema,
+  AREA_RULE,
+  checkoutBaseSchema,
+  hasDeliveryArea,
   DELIVERY_METHOD_LABELS,
   normalizeUgPhone,
   ORDER_SOURCES,
@@ -120,7 +122,7 @@ adminOrderRoutes.get("/orders/:id", requirePermission(P.ordersView), async (c) =
 
 /** Manual order entry for WhatsApp / phone orders. */
 adminOrderRoutes.post("/orders", requirePermission(P.ordersManage), async (c) => {
-  const input = await body(c, checkoutSchema.extend({ source: z.enum(ORDER_SOURCES).default("whatsapp"), items: checkoutSchema.shape.items.unwrap() }));
+  const input = await body(c, checkoutBaseSchema.extend({ source: z.enum(ORDER_SOURCES).default("whatsapp"), items: checkoutBaseSchema.shape.items.unwrap() }).refine(hasDeliveryArea, AREA_RULE));
   try {
     const r = await c.get("container").orders.placeOrder(input, { source: input.source, staffId: c.get("staff").id });
     await audit(c.get("container").db, c.get("staff").id, "order.create", "order", r.order.id, { source: input.source });

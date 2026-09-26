@@ -21,7 +21,7 @@ interface Job {
   phoneHref: string;
   whatsappHref: string;
   altPhone: string | null;
-  location: { district: string; area: string; address: string };
+  location: { district: string; area: string; address: string; path: string | null; nearbyPlace: string | null };
   navigationUrl: string;
   amountToCollect: number;
   amountCollected: number | null;
@@ -87,8 +87,9 @@ export default function RiderApp() {
             </div>
             <div>
               <div className="text-lg font-semibold">{j.customerName}</div>
-              <div className="text-sm text-gray-600">{j.location.address}</div>
-              <div className="text-sm text-gray-600">{j.location.area}, {j.location.district}</div>
+              <div className="text-sm text-gray-600">{j.location.path ? j.location.path.split(" › ").slice(1).join(" › ") : `${j.location.area}, ${j.location.district}`}</div>
+              {j.location.nearbyPlace && <div className="text-sm text-gray-800">Near: {j.location.nearbyPlace}</div>}
+              <div className="text-sm font-medium text-gray-800">📍 {j.location.address}</div>
               {j.notes && <div className="mt-1 rounded bg-amber-50 p-2 text-sm">📝 {j.notes}</div>}
             </div>
             <ul className="text-sm text-gray-700">

@@ -20,10 +20,11 @@ fi
 docker compose build --pull
 docker compose up -d postgres redis
 docker compose up -d api          # runs database migrations on start
+until docker compose exec -T api node -e "fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))" 2>/dev/null; do sleep 2; done
+if [ "${1:-}" = "--seed" ]; then
+  docker compose exec -T api node dist/seed.js             # roles, owner, zones, Uganda areas (+ sample data if enabled)
+fi
+docker compose exec -T api node dist/seed-locations.js   # Uganda areas for delivery (no-op after the first time)
 docker compose up -d worker storefront admin nginx
 docker compose ps
-
-if [ "${1:-}" = "--seed" ]; then
-  docker compose exec -T api node dist/seed.js
-fi
 echo "Deployed. Storefront: https://$SHOP_DOMAIN  Admin: https://$ADMIN_DOMAIN"

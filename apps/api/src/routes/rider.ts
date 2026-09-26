@@ -25,7 +25,7 @@ riderRoutes.get("/deliveries", async (c) => {
   const items = rows.length ? await db.select().from(orderItems).where(inArray(orderItems.orderId, rows.map((r) => r.o.id))) : [];
   return c.json(
     rows.map(({ d, o }) => {
-      const destination = `${o.address}, ${o.area}, ${o.district}, Uganda`;
+      const destination = [o.address, o.nearbyPlace, o.area, o.district, "Uganda"].filter(Boolean).join(", ");
       return {
         id: d.id,
         orderId: o.id,
@@ -37,7 +37,7 @@ riderRoutes.get("/deliveries", async (c) => {
         phoneHref: `tel:+${o.phone}`,
         whatsappHref: `https://wa.me/${o.phone}`,
         altPhone: o.altPhone ? prettyUgPhone(o.altPhone) : null,
-        location: { district: o.district, area: o.area, address: o.address },
+        location: { district: o.district, area: o.area, address: o.address, path: o.locationPath, nearbyPlace: o.nearbyPlace },
         navigationUrl: `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`,
         amountToCollect: d.amountToCollect,
         amountCollected: d.amountCollected,

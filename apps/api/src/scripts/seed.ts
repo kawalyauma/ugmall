@@ -26,6 +26,7 @@ import { ensureInventoryRows, inventory } from "@ugmall/inventory";
 import { createStorageFromEnv, processAndStoreImage } from "@ugmall/storage";
 import { DEFAULT_ROLES, slugify } from "@ugmall/shared";
 import sharp from "sharp";
+import { seedLocations } from "./seed-locations";
 
 const { db, client } = createDb();
 const storage = createStorageFromEnv();
@@ -72,6 +73,8 @@ async function main() {
     { name: "Upcountry", district: null, fee: null, isCalculated: true, baseFee: 10000, perKgFee: 1500, etaText: "1–3 days by bus parcel/courier", methods: ["bus_parcel", "courier"], sortOrder: 9 },
   ];
   for (const z of zones) await db.insert(deliveryZones).values(z).onConflictDoNothing();
+
+  await seedLocations(db);
 
   if (process.env.SEED_SAMPLE_DATA === "false") return;
 

@@ -18,10 +18,11 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store --mount=type=secret,id=ca,requ
  && pnpm --filter @ugmall/api build \
  && pnpm --filter @ugmall/api deploy --prod --legacy /out \
  && cp -r apps/api/dist /out/dist \
- && cp -r packages/database/migrations /out/migrations
+ && cp -r packages/database/migrations /out/migrations \
+ && cp -r packages/delivery/data /out/data
 
 FROM node:22-bookworm-slim AS runtime
-ENV NODE_ENV=production MIGRATIONS_DIR=/app/migrations STORAGE_ROOT=/storage
+ENV NODE_ENV=production MIGRATIONS_DIR=/app/migrations STORAGE_ROOT=/storage LOCATIONS_DATA=/app/data/uganda-locations.json.gz
 RUN mkdir -p /storage && chown node:node /storage
 WORKDIR /app
 COPY --from=build --chown=node:node /out ./

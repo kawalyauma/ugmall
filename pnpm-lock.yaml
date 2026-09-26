@@ -213,9 +213,15 @@ importers:
 
   packages/delivery:
     dependencies:
+      '@ugmall/database':
+        specifier: workspace:*
+        version: link:../database
       '@ugmall/shared':
         specifier: workspace:*
         version: link:../shared
+      drizzle-orm:
+        specifier: ^0.45.0
+        version: 0.45.3(postgres@3.4.9)
 
   packages/importer:
     dependencies:
