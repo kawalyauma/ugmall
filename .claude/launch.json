@@ -1,0 +1,7 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "storefront", "runtimeExecutable": "pnpm", "runtimeArgs": ["--filter", "@ugmall/storefront", "dev"], "port": 3000 },
+    { "name": "admin", "runtimeExecutable": "pnpm", "runtimeArgs": ["--filter", "@ugmall/admin", "dev"], "port": 3001 }
+  ]
+}
