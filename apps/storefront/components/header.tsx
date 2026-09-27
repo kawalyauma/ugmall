@@ -1,16 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
 import { Heart, Home, LayoutGrid, Search, ShoppingBag, User } from "lucide-react";
 import { useStore } from "./providers";
+import { SearchBox } from "./search-box";
 import type { Category } from "@/lib/types";
 
 export function Header({ categories }: { categories: Category[] }) {
   const { settings, cart } = useStore();
-  const router = useRouter();
-  const [q, setQ] = useState("");
   const top = categories.filter((c) => !c.parentId);
 
   return (
@@ -20,23 +17,7 @@ export function Header({ categories }: { categories: Category[] }) {
         <Link href="/" className="shrink-0 text-lg font-extrabold tracking-tight text-brand-700">
           {settings.shopName}
         </Link>
-        <form
-          className="hidden flex-1 md:block"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (q.trim()) router.push(`/search?q=${encodeURIComponent(q.trim())}`);
-          }}
-        >
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-gray-400" />
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search jeans, dresses, shoes…"
-              className="h-10 w-full rounded-full border border-gray-300 bg-gray-50 pl-9 pr-4 text-sm outline-none focus:border-brand-600 focus:bg-white"
-            />
-          </div>
-        </form>
+        <SearchBox className="hidden flex-1 md:block" />
         <nav className="ml-auto flex items-center gap-1">
           <Link href="/search" className="rounded-full p-2 hover:bg-gray-100 md:hidden" aria-label="Search">
             <Search className="size-5" />

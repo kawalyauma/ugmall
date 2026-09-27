@@ -79,6 +79,7 @@ export async function listProducts(db: Database, f: ListFilters) {
         ilike(products.name, `%${q.replace(/[%_]/g, "")}%`),
         ilike(products.sku, `${q.replace(/[%_]/g, "")}%`),
         sql`${q} ilike any(${products.tags})`,
+        sql`exists (select 1 from ${brands} b where b.id = ${products.brandId} and b.name ilike ${`${q.replace(/[%_]/g, "")}%`})`,
       )!,
     );
   }
@@ -90,7 +91,20 @@ export async function listProducts(db: Database, f: ListFilters) {
   if (f.size) where.push(sql`${f.size} = any(${products.sizes})`);
   if (f.colour) where.push(sql`lower(${f.colour}) = any(select lower(x) from unnest(${products.colours}) x)`);
   if (f.featured) where.push(eq(products.isFeatured, true));
-  if (f.onSale) where.push(sql`${priceExpr} < ${products.price}`);
+  const promos = await activePromotions(db);
+  if (f.onSale) {
+    // Discounted by its own sale price, or covered by a live percentage promotion.
+    const discounting = promos.filter((p) => p.percentOff);
+    const promoProducts = [...new Set(discounting.flatMap((p) => p.productIds))];
+    const promoCategories = [...new Set(discounting.flatMap((p) => p.categoryIds))];
+    where.push(
+      or(
+        sql`${priceExpr} < ${products.price}`,
+        promoProducts.length ? inArray(products.id, promoProducts) : undefined,
+        promoCategories.length ? inArray(products.categoryId, promoCategories) : undefined,
+      )!,
+    );
+  }
 
   const order =
     f.sort === "price_asc"
@@ -124,7 +138,6 @@ export async function listProducts(db: Database, f: ListFilters) {
       .from(products)
       .where(and(...where)) as unknown as Promise<[{ total: number }]>,
   ]);
-  const promos = await activePromotions(db);
   const imgs = await imagesFor(db, rows.map((r) => r.p.id));
   return {
     total,

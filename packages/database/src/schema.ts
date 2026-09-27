@@ -434,6 +434,23 @@ export const promotions = pgTable("promotions", {
   createdAt: createdAt(),
 });
 
+/** Homepage slider deals: a graphic uploaded by staff plus a hand-picked set of products. */
+export const deals = pgTable("deals", {
+  id: id(),
+  title: text("title").notNull(),
+  slug: text("slug").notNull().unique(),
+  subtitle: text("subtitle"),
+  /** Wide slide graphic (desktop) and optional tall/square one for phones. */
+  imageId: uuid("image_id").references(() => mediaFiles.id, { onDelete: "set null" }),
+  mobileImageId: uuid("mobile_image_id").references(() => mediaFiles.id, { onDelete: "set null" }),
+  productIds: uuid("product_ids").array().notNull().default(sql`'{}'::uuid[]`),
+  sortOrder: integer("sort_order").notNull().default(0),
+  startsAt: timestamp("starts_at", { withTimezone: true }),
+  endsAt: timestamp("ends_at", { withTimezone: true }),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: createdAt(),
+});
+
 /* ------------------------------------------------------------------ orders */
 
 export const orders = pgTable(

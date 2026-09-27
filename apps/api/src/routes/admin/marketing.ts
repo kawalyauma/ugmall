@@ -1,11 +1,11 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { coupons, promotions } from "@ugmall/database";
+import { coupons, deals, mediaFiles, productImages, products, promotions } from "@ugmall/database";
 import { COUPON_TYPES, PERMISSIONS, slugify } from "@ugmall/shared";
 import { crudRoutes } from "../../lib/crud";
 import { readUpload, saveImage } from "../../lib/media";
 import { requirePermission } from "../../middleware/auth";
-import { eq } from "drizzle-orm";
+import { asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { ApiError } from "../../lib/http";
 import type { AppEnv } from "../../types";
 
@@ -77,4 +77,64 @@ adminMarketingRoutes.post("/promotions/:id/banner", requirePermission(P.promotio
   const media = await saveImage(db, storage, { area: "categories", folders: ["offers", promo.slug], baseName: "banner", buffer, originalName: name, staffId: c.get("staff").id });
   await db.update(promotions).set({ bannerId: media.id }).where(eq(promotions.id, promo.id));
   return c.json({ bannerId: media.id, url: media.publicUrl });
+});
+
+
+/** Deals list for the admin editor: slide URLs plus a preview of each chosen product. Shadows crudRoutes' list. */
+adminMarketingRoutes.get("/deals", requirePermission(P.promotionsManage), async (c) => {
+  const { db } = c.get("container");
+  const url = (col: "image_id" | "mobile_image_id") => sql<string | null>`(select m.public_url from ${mediaFiles} m where m.id = ${sql.identifier("deals")}.${sql.identifier(col)})`;
+  const rows = await db
+    .select({ d: deals, image: url("image_id"), mobileImage: url("mobile_image_id") })
+    .from(deals)
+    .orderBy(asc(deals.sortOrder), desc(deals.createdAt));
+  const ids = [...new Set(rows.flatMap((r) => r.d.productIds))];
+  const prods = ids.length
+    ? await db
+        .select({
+          id: products.id,
+          name: products.name,
+          sku: products.sku,
+          status: products.status,
+          image: sql<string | null>`(select coalesce(m.variants->'thumb'->>'url', m.public_url) from ${productImages} pi join ${mediaFiles} m on m.id = pi.media_id where pi.product_id = "products"."id" order by pi.sort_order limit 1)`,
+        })
+        .from(products)
+        .where(inArray(products.id, ids))
+    : [];
+  const byId = new Map(prods.map((p) => [p.id, p]));
+  const items = rows.map((r) => ({ ...r.d, image: r.image, mobileImage: r.mobileImage, products: r.d.productIds.map((id) => byId.get(id)).filter(Boolean) }));
+  return c.json({ items, total: items.length });
+});
+
+adminMarketingRoutes.route(
+  "/deals",
+  crudRoutes({
+    table: deals,
+    schema: z.object({
+      title: z.string().trim().min(2).max(120),
+      slug: z.string().max(120).optional(),
+      subtitle: z.string().max(300).nullable().optional(),
+      productIds: z.array(z.string().uuid()).max(500).default([]),
+      sortOrder: z.number().int().min(0).max(1000).default(0),
+      startsAt: dateish,
+      endsAt: dateish,
+      isActive: z.boolean().default(true),
+    }),
+    entity: "deal",
+    permission: P.promotionsManage,
+    searchColumns: [deals.title],
+    prepare: (i) => (i.title || i.slug ? { ...i, slug: slugify(String(i.slug || i.title)) } : i),
+  }),
+);
+
+/** Slide graphic upload; `?kind=mobile` sets the optional phone-sized graphic. */
+adminMarketingRoutes.post("/deals/:id/image", requirePermission(P.promotionsManage), async (c) => {
+  const { db, storage } = c.get("container");
+  const [deal] = await db.select().from(deals).where(eq(deals.id, c.req.param("id")));
+  if (!deal) throw new ApiError(404, "Deal not found");
+  const mobile = c.req.query("kind") === "mobile";
+  const { buffer, name } = await readUpload(await c.req.formData());
+  const media = await saveImage(db, storage, { area: "categories", folders: ["deals", deal.slug], baseName: mobile ? "slide-mobile" : "slide", buffer, originalName: name, staffId: c.get("staff").id });
+  await db.update(deals).set(mobile ? { mobileImageId: media.id } : { imageId: media.id }).where(eq(deals.id, deal.id));
+  return c.json({ imageId: media.id, url: media.publicUrl });
 });

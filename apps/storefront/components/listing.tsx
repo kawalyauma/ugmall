@@ -23,7 +23,7 @@ function qs(base: Record<string, string | undefined>, patch: Record<string, stri
 /** Server-rendered product listing with URL-driven filters (works without JS, good for SEO and slow phones). */
 export async function Listing({ basePath, fixed, searchParams, title, subtitle }: { basePath: string; fixed: Record<string, string>; searchParams: SearchParams; title: string; subtitle?: string }) {
   const sp: Record<string, string | undefined> = {};
-  for (const k of ["sort", "size", "min", "max", "page", "q", "sale"]) {
+  for (const k of ["sort", "size", "min", "max", "page", "q", "sale", "brand"]) {
     const v = searchParams[k];
     sp[k] = Array.isArray(v) ? v[0] : v;
   }

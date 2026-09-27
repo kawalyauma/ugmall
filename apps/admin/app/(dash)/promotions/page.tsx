@@ -4,13 +4,19 @@ import { COUPON_TYPES } from "@ugmall/shared";
 import { Resource } from "@/components/resource";
 import { Badge, PageHeader, dt, money } from "@/components/ui/kit";
 import { useApi } from "@/lib/hooks";
+import { upload } from "@/lib/api";
+import { useToast } from "@/components/toast";
 
 export default function PromotionsPage() {
+  const toast = useToast();
   const { data: cats } = useApi<{ items: { id: string; name: string }[] }>("/admin/categories?limit=500");
   const { data: prods } = useApi<{ items: { id: string; name: string }[] }>("/admin/products?limit=200&status=active");
   return (
     <>
-      <PageHeader title="Promotions & coupons" subtitle="Promotions discount products automatically; coupons are codes customers type at checkout." />
+      <PageHeader
+        title="Promotions & coupons"
+        subtitle="Promotions discount products automatically; the newest live promotion leads the homepage campaign strip. Coupons are codes customers type at checkout."
+      />
       <div className="space-y-4">
         <Resource
           title="Promotions"
@@ -30,6 +36,24 @@ export default function PromotionsPage() {
             { header: "Discount", cell: (r) => (r.percentOff ? `${r.percentOff}%` : "—") },
             { header: "Ends", cell: (r) => dt(r.endsAt as string) },
             { header: "Status", cell: (r) => (r.isActive ? <Badge tone="green">Active</Badge> : <Badge>Off</Badge>) },
+            {
+              header: "Banner",
+              cell: (r) => (
+                <label className="cursor-pointer text-xs text-brand-700" onClick={(e) => e.stopPropagation()}>
+                  {r.bannerId ? "Replace" : "Upload"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const f = e.target.files?.[0];
+                      if (!f) return;
+                      await upload(`/admin/promotions/${r.id}/banner`, f).then(() => toast("Banner uploaded"), (err) => toast(err.message, "error"));
+                    }}
+                  />
+                </label>
+              ),
+            },
           ]}
         />
         <Resource

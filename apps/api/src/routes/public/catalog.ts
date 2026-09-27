@@ -1,6 +1,6 @@
 import { Hono } from "hono";
-import { and, asc, desc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
-import { brands, categories, deliveryZones, mediaFiles, promotions, reviews } from "@ugmall/database";
+import { aliasedTable, and, asc, desc, eq, gt, ilike, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { brands, categories, deals, deliveryZones, mediaFiles, promotions, reviews } from "@ugmall/database";
 import { childLocations, LEVEL_LABELS, resolveLocation, searchLocations } from "@ugmall/delivery";
 import { ApiError, pagination } from "../../lib/http";
 import { listProducts, productDetail } from "../../lib/catalog";
@@ -60,6 +60,10 @@ catalogRoutes.get("/products", async (c) => {
   let brandId: string | undefined;
   if (q.brand) brandId = (await db.select({ id: brands.id }).from(brands).where(eq(brands.slug, q.brand)))[0]?.id ?? "00000000-0000-0000-0000-000000000000";
   let productIds: string[] | undefined;
+  if (q.deal) {
+    const [deal] = await db.select({ productIds: deals.productIds }).from(deals).where(and(eq(deals.slug, q.deal), liveDeal()));
+    productIds = deal?.productIds ?? [];
+  }
   if (q.offer) {
     const [promo] = await db.select().from(promotions).where(eq(promotions.slug, q.offer));
     if (promo) {
@@ -85,6 +89,40 @@ catalogRoutes.get("/products", async (c) => {
     offset,
   });
   return c.json({ ...result, page, limit });
+});
+
+/** Type-ahead for the search box: matching products, categories and brands in one round trip. */
+catalogRoutes.get("/search/suggest", async (c) => {
+  const { db } = c.get("container");
+  const q = (c.req.query("q") ?? "").trim().slice(0, 60);
+  if (q.length < 2) return c.json({ products: [], categories: [], brands: [] });
+  const like = `%${q.replace(/[%_\\]/g, "")}%`;
+  // Names that start with the query rank above ones that merely contain it.
+  const starts = (col: typeof categories.name | typeof brands.name) => sql`case when ${col} ilike ${`${q.replace(/[%_\\]/g, "")}%`} then 0 else 1 end`;
+  const parent = aliasedTable(categories, "parent");
+  const [found, cats, brandRows] = await Promise.all([
+    listProducts(db, { q, limit: 6, offset: 0, sort: "popular" }),
+    db
+      .select({ name: categories.name, slug: categories.slug, parent: parent.name })
+      .from(categories)
+      .leftJoin(parent, eq(parent.id, categories.parentId))
+      .where(and(eq(categories.isActive, true), ilike(categories.name, like)))
+      .orderBy(starts(categories.name), asc(sql`length(${categories.name})`))
+      .limit(5),
+    db
+      .select({ name: brands.name, slug: brands.slug })
+      .from(brands)
+      .where(and(eq(brands.isActive, true), ilike(brands.name, like)))
+      .orderBy(starts(brands.name), asc(brands.name))
+      .limit(4),
+  ]);
+  c.header("Cache-Control", "public, max-age=60");
+  return c.json({
+    products: found.items.map((p) => ({ name: p.name, slug: p.slug, price: p.price, compareAt: p.compareAt, image: p.image?.thumb ?? p.image?.url ?? null, category: p.category?.name ?? null })),
+    categories: cats,
+    brands: brandRows,
+    total: found.total,
+  });
 });
 
 catalogRoutes.get("/products/:slug", async (c) => {
@@ -134,6 +172,49 @@ catalogRoutes.get("/offers", async (c) => {
   return c.json(
     rows.map((r) => ({ id: r.p.id, title: r.p.title, slug: r.p.slug, description: r.p.description, percentOff: r.p.percentOff, endsAt: r.p.endsAt, banner: r.banner })),
   );
+});
+
+function liveDeal(now = new Date()) {
+  return and(eq(deals.isActive, true), or(isNull(deals.startsAt), lte(deals.startsAt, now)), or(isNull(deals.endsAt), gt(deals.endsAt, now)))!;
+}
+
+/** Homepage slider: live deals that have a slide graphic. */
+catalogRoutes.get("/deals", async (c) => {
+  const { db } = c.get("container");
+  const rows = await db
+    .select({
+      d: deals,
+      image: mediaFiles.publicUrl,
+      mobileImage: sql<string | null>`(select m.public_url from ${mediaFiles} m where m.id = ${deals.mobileImageId})`,
+    })
+    .from(deals)
+    .innerJoin(mediaFiles, eq(mediaFiles.id, deals.imageId))
+    .where(liveDeal())
+    .orderBy(asc(deals.sortOrder), desc(deals.createdAt));
+  c.header("Cache-Control", "public, max-age=30");
+  return c.json(
+    rows.map((r) => ({
+      id: r.d.id,
+      title: r.d.title,
+      slug: r.d.slug,
+      subtitle: r.d.subtitle,
+      endsAt: r.d.endsAt,
+      image: r.image,
+      mobileImage: r.mobileImage,
+      productCount: r.d.productIds.length,
+    })),
+  );
+});
+
+catalogRoutes.get("/deals/:slug", async (c) => {
+  const { db } = c.get("container");
+  const [row] = await db
+    .select({ d: deals, image: mediaFiles.publicUrl })
+    .from(deals)
+    .leftJoin(mediaFiles, eq(mediaFiles.id, deals.imageId))
+    .where(and(eq(deals.slug, c.req.param("slug")), liveDeal()));
+  if (!row) throw new ApiError(404, "Deal not found");
+  return c.json({ id: row.d.id, title: row.d.title, slug: row.d.slug, subtitle: row.d.subtitle, endsAt: row.d.endsAt, image: row.image });
 });
 
 catalogRoutes.get("/delivery-zones", async (c) => {

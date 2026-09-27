@@ -29,6 +29,13 @@
       "when": 1790426893099,
       "tag": "0003_no_pickup",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790508036543,
+      "tag": "0004_deals",
+      "breakpoints": true
     }
   ]
 }
