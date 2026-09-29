@@ -37,6 +37,9 @@ export function trackCommerceEvent(name: "view_item" | "add_to_cart" | "begin_ch
   const metaName = META_EVENTS[name];
   if (metaName) {
     const items = Array.isArray(params.items) ? params.items as Array<Record<string, unknown>> : [];
-    window.fbq?.("track", metaName, { value: params.value, currency: params.currency ?? "UGX", content_ids: items.map((x) => x.item_id).filter(Boolean), content_type: "product", num_items: items.length });
+    const eventId = typeof params.event_id === "string" ? params.event_id : undefined;
+    const payload = { value: params.value, currency: params.currency ?? "UGX", content_ids: items.map((x) => x.item_id).filter(Boolean), content_type: "product", num_items: items.length };
+    if (eventId) window.fbq?.("track", metaName, payload, { eventID: eventId });
+    else window.fbq?.("track", metaName, payload);
   }
 }

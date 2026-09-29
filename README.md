@@ -192,3 +192,4 @@ Private — all rights reserved.
 - Google Merchant Center scheduled feed: `https://<SHOP_DOMAIN>/api/store/feeds/google.xml`
 - Meta Commerce Manager catalogue feed: `https://<SHOP_DOMAIN>/api/store/feeds/meta.csv`
 - Set `NEXT_PUBLIC_GA_MEASUREMENT_ID` and/or `NEXT_PUBLIC_META_PIXEL_ID` in `.env`, then rebuild the storefront with `./scripts/deploy.sh`.
+- For Meta server-side purchase tracking, also set `META_CONVERSIONS_API_TOKEN`. Browser Pixel and Conversions API Purchase events share the same event ID for deduplication.

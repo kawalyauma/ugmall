@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { Hono, type Context } from "hono";
 import { z } from "zod";
 import { and, asc, desc, eq } from "drizzle-orm";
@@ -120,6 +121,57 @@ async function findTrackedOrder(c: Context<AppEnv>, orderNumber: string, token: 
   if (!order || (order.trackingToken !== token && order.customerId !== customer?.id)) throw new ApiError(404, "Order not found");
   return order;
 }
+
+const sha256 = (value: string) => createHash("sha256").update(value.trim().toLowerCase()).digest("hex");
+
+/** Server-side Meta Conversions API Purchase event, deduped with the browser Pixel using eventId. */
+trackingRoutes.post("/:orderNumber/meta-purchase", limit("meta-purchase", 10, 600), async (c) => {
+  const input = await body(c, z.object({ t: z.string().optional(), eventId: z.string().min(8).max(120) }));
+  const order = await findTrackedOrder(c, c.req.param("orderNumber"), input.t);
+  const qualifies = order.paymentStatus === "paid" || order.paymentMethod === "cash_on_delivery";
+  if (!qualifies || order.status === "cancelled") throw new ApiError(409, "Order is not ready for purchase tracking");
+
+  const pixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID;
+  const token = process.env.META_CONVERSIONS_API_TOKEN;
+  if (!pixelId || !token) return c.json({ ok: true, configured: false });
+
+  const items = await c.get("container").db.select().from(orderItems).where(eq(orderItems.orderId, order.id));
+  const base = (process.env.STOREFRONT_URL ?? new URL(c.req.url).origin).replace(/\/$/, "");
+  const phone = order.phone.replace(/\D/g, "");
+  const payload = {
+    data: [{
+      event_name: "Purchase",
+      event_time: Math.floor(Date.now() / 1000),
+      event_id: input.eventId,
+      action_source: "website",
+      event_source_url: base,
+      user_data: {
+        ph: phone ? [sha256(phone)] : undefined,
+        client_ip_address: clientIp(c),
+        client_user_agent: c.req.header("user-agent") ?? undefined,
+      },
+      custom_data: {
+        currency: "UGX",
+        value: order.total,
+        order_id: order.orderNumber,
+        content_type: "product",
+        contents: items.map((i) => ({ id: i.productId, quantity: i.quantity, item_price: i.unitPrice })),
+      },
+    }],
+  };
+
+  const response = await fetch(`https://graph.facebook.com/v22.0/${encodeURIComponent(pixelId)}/events?access_token=${encodeURIComponent(token)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    console.warn("[meta-capi] purchase event failed", response.status, detail.slice(0, 300));
+    throw new ApiError(502, "Purchase tracking provider unavailable");
+  }
+  return c.json({ ok: true, configured: true });
+});
 
 /** Find an order by number + phone (for customers who lost the tracking link). */
 trackingRoutes.post("/lookup", limit("order-lookup", 10, 600), async (c) => {

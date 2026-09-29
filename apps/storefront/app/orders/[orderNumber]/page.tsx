@@ -10,6 +10,7 @@ import { useStore } from "@/components/providers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { trackCommerceEvent } from "@/components/analytics";
 
 interface Tracked {
   orderNumber: string;
@@ -34,7 +35,7 @@ interface Tracked {
   canRetryPayment: boolean;
   canCancel: boolean;
   latestPayment: { provider: string; status: string; failureReason: string | null; msisdn: string | null } | null;
-  items: { id: string; productName: string; variantLabel: string | null; imageUrl: string | null; unitPrice: number; quantity: number; lineTotal: number }[];
+  items: { id: string; productId: string; productName: string; variantLabel: string | null; imageUrl: string | null; unitPrice: number; quantity: number; lineTotal: number }[];
   history: { status: OrderStatus; label: string; at: string }[];
   delivery: { status: string; riderName: string | null; riderPhone: string | null; carrierName: string | null; trackingNumber: string | null } | null;
 }
@@ -50,6 +51,10 @@ export default function OrderPage({ params }: { params: Promise<{ orderNumber: s
   const [retryPhone, setRetryPhone] = useState("");
   const [busy, setBusy] = useState(false);
 
+  const purchaseEventSent = useState(false);
+  const purchaseSent = purchaseEventSent[0];
+  const setPurchaseSent = purchaseEventSent[1];
+
   const load = useCallback(async () => {
     try {
       setOrder(await api<Tracked>(`/store/orders/${orderNumber}?t=${encodeURIComponent(t)}`));
@@ -61,6 +66,28 @@ export default function OrderPage({ params }: { params: Promise<{ orderNumber: s
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!order || !isNew || purchaseSent || order.status === "cancelled") return;
+    const qualifies = order.paymentStatus === "paid" || order.paymentMethod === "cash_on_delivery";
+    if (!qualifies) return;
+    const key = `ugmall.purchase.${order.orderNumber}`;
+    if (sessionStorage.getItem(key)) {
+      setPurchaseSent(true);
+      return;
+    }
+    const eventId = `purchase:${order.orderNumber}`;
+    trackCommerceEvent("purchase", {
+      event_id: eventId,
+      transaction_id: order.orderNumber,
+      currency: "UGX",
+      value: order.total,
+      items: order.items.map((i) => ({ item_id: i.productId, item_name: i.productName, price: i.unitPrice, quantity: i.quantity })),
+    });
+    sessionStorage.setItem(key, "1");
+    setPurchaseSent(true);
+    void api(`/store/orders/${order.orderNumber}/meta-purchase`, { body: { t, eventId } }).catch(() => null);
+  }, [order, isNew, purchaseSent, t]);
 
   // Poll while waiting for the customer to approve the Mobile Money prompt.
   useEffect(() => {
