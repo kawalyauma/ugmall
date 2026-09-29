@@ -20,6 +20,7 @@ import { useStore } from "@/components/providers";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { trackCommerceEvent } from "@/components/analytics";
 
 interface Quote {
   subtotal: number;
@@ -84,6 +85,14 @@ export default function CheckoutPage() {
     }
   };
   const reservedOnce = useRef(false);
+  const checkoutTracked = useRef(false);
+  useEffect(() => {
+    if (cart.count > 0 && !checkoutTracked.current) {
+      checkoutTracked.current = true;
+      trackCommerceEvent("begin_checkout", { currency: "UGX", value: cart.subtotal, items: cart.items.map((i) => ({ item_id: i.productId, item_name: i.productName, item_variant: i.sku, price: i.unitPrice, quantity: i.quantity })) });
+    }
+  }, [cart.count, cart.subtotal, cart.items]);
+
   useEffect(() => {
     if (cart.count > 0 && !reservedOnce.current) {
       reservedOnce.current = true;

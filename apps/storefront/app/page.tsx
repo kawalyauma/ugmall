@@ -1,10 +1,12 @@
 import Link from "next/link";
-import { ArrowRight, Flame, MessageCircle, ShieldCheck, Shirt, Smartphone, Truck, Zap } from "lucide-react";
+import { ArrowRight, Flame, MessageCircle, ShieldCheck, Shirt, Smartphone, Sparkles, Truck, Zap } from "lucide-react";
+import { whatsappLink } from "@ugmall/shared";
 import { serverGet } from "@/lib/api";
-import type { ProductCard as Product, ShopSettings } from "@/lib/types";
+import type { Category, ProductCard as Product, ShopSettings } from "@/lib/types";
 import { ProductCard, ProductGrid } from "@/components/product-card";
 import { Countdown } from "@/components/countdown";
 import { DealsCarousel, type DealSlide } from "@/components/deals-carousel";
+import { RecentlyViewedSection } from "@/components/recently-viewed";
 
 interface Offer {
   id: string;
@@ -101,9 +103,11 @@ function Campaign({ offers, items, total }: { offers: Offer[]; items: Product[];
 }
 
 export default async function Home() {
-  const [settings, fashion, trending, phoneAccessories, offers, onPromotion, deals] = await Promise.all([
+  const [settings, categories, featured, newest, trending, phoneAccessories, offers, onPromotion, deals] = await Promise.all([
     serverGet<ShopSettings>("/store/settings"),
-    serverGet<{ items: Product[] }>("/store/products?category=fashion&sort=newest&limit=8"),
+    serverGet<Category[]>("/store/categories", { revalidate: 120 }).catch(() => []),
+    serverGet<{ items: Product[] }>("/store/products?featured=1&sort=popular&limit=8"),
+    serverGet<{ items: Product[] }>("/store/products?sort=newest&limit=8"),
     serverGet<{ items: Product[] }>("/store/products?sort=popular&limit=8"),
     serverGet<{ items: Product[] }>("/store/products?categories=chargers-adapters,cables,cases,earphones-headsets,screen-protectors&sort=popular&limit=8"),
     serverGet<Offer[]>("/store/offers").catch(() => []),
@@ -137,9 +141,12 @@ export default async function Home() {
         ))}
       </section>
 
-      <ProductSection icon={Shirt} eyebrow="Style edit" title="Fashion" description="Fresh fashion picks from across the catalogue." href="/c/fashion" items={fashion.items} accent="bg-rose-100 text-rose-800" />
-      <ProductSection icon={Flame} eyebrow="Popular now" title="Trending items" description="The products shoppers are viewing and buying most." href="/search?sort=popular" items={trending.items} accent="bg-amber-100 text-amber-800" />
+      {categories.filter((c) => !c.parentId).length > 0 && <section className="container-page mt-8"><div className="mb-3 flex items-end justify-between"><div><div className="text-xs font-bold uppercase tracking-[0.16em] text-brand-700">Browse faster</div><h2 className="mt-1 text-2xl font-black tracking-tight">Shop by category</h2></div><Link href="/categories" className="text-sm font-bold text-brand-700">All categories →</Link></div><div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2 md:mx-0 md:grid md:grid-cols-6 md:px-0">{categories.filter((c) => !c.parentId).slice(0, 12).map((c) => <Link key={c.id} href={`/c/${c.slug}`} className="w-28 shrink-0 rounded-2xl border border-gray-200 bg-white p-3 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md md:w-auto"><div className="mx-auto mb-2 grid aspect-square w-full place-items-center overflow-hidden rounded-xl bg-gray-50">{c.image ? <img src={c.image} alt="" className="size-full object-contain p-1" /> : <Shirt className="size-7 text-brand-700" />}</div><div className="line-clamp-2 text-xs font-bold">{c.name}</div></Link>)}</div></section>}
+      {featured.items.length > 0 && <ProductSection icon={Sparkles} eyebrow="Staff picks" title="Featured products" description="Products selected for value, availability and customer interest." href="/search?featured=1" items={featured.items} accent="bg-emerald-100 text-emerald-800" />}
+      <ProductSection icon={Flame} eyebrow="Best sellers" title="Popular right now" description="Products shoppers are buying most often." href="/search?sort=popular" items={trending.items} accent="bg-amber-100 text-amber-800" />
+      <ProductSection icon={Shirt} eyebrow="Just added" title="New arrivals" description="The newest products added to UG Mall." href="/search?sort=newest" items={newest.items} accent="bg-rose-100 text-rose-800" />
       <ProductSection icon={Smartphone} eyebrow="Everyday tech" title="Phone accessories" description="Chargers, cables, cases, audio and device protection." href="/categories" items={phoneAccessories.items} accent="bg-sky-100 text-sky-800" />
+      <RecentlyViewedSection />
     </>
   );
 }

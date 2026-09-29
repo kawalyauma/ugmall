@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { Heart, Home, LayoutGrid, Search, ShoppingBag, User } from "lucide-react";
+import { Heart, Home, LayoutGrid, MessageCircle, Search, ShoppingBag, User } from "lucide-react";
+import { whatsappLink } from "@ugmall/shared";
 import { useStore } from "./providers";
 import { SearchBox } from "./search-box";
 import type { Category } from "@/lib/types";
@@ -12,7 +13,7 @@ export function Header({ categories }: { categories: Category[] }) {
 
   return (
     <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/95 backdrop-blur">
-      {settings.announcement && <div className="bg-brand-700 px-4 py-1.5 text-center text-xs font-medium text-white">{settings.announcement}</div>}
+      {settings.announcement && (settings.whatsappNumber ? <a href={whatsappLink(settings.whatsappNumber, "Hi UG Mall, I need help with an order.")} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-1.5 bg-brand-700 px-4 py-1.5 text-center text-xs font-medium text-white hover:bg-brand-800"><MessageCircle className="size-3.5" /> {settings.announcement}</a> : <div className="bg-brand-700 px-4 py-1.5 text-center text-xs font-medium text-white">{settings.announcement}</div>)}
       <div className="container-page flex h-14 items-center gap-3">
         <Link href="/" className="shrink-0 text-lg font-extrabold tracking-tight text-brand-700">
           {settings.shopName}
@@ -36,6 +37,7 @@ export function Header({ categories }: { categories: Category[] }) {
           </Link>
         </nav>
       </div>
+      <div className="container-page flex gap-2 overflow-x-auto pb-2 text-xs font-semibold text-gray-600 md:hidden">{top.slice(0, 6).map((c) => <Link key={c.id} href={`/c/${c.slug}`} className="shrink-0 rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5">{c.name}</Link>)}<Link href="/offers" className="shrink-0 rounded-full bg-amber-50 px-3 py-1.5 text-amber-800">Offers</Link></div>
       <div className="container-page hidden items-center gap-5 overflow-hidden pb-2 text-sm font-medium text-gray-600 md:flex">
         {top.slice(0, 8).map((c) => (
           <Link key={c.id} href={`/c/${c.slug}`} className="min-w-0 truncate hover:text-brand-700">

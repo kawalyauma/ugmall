@@ -9,6 +9,7 @@ import type { Cart, ProductDetail } from "@/lib/types";
 import { useStore } from "@/components/providers";
 import { Button } from "@/components/ui/button";
 import { Price } from "@/components/price";
+import { trackCommerceEvent } from "@/components/analytics";
 import { cn } from "@/lib/utils";
 
 export function ProductPurchase({ product: p, whatsappNumber }: { product: ProductDetail; whatsappNumber: string }) {
@@ -38,6 +39,7 @@ export function ProductPurchase({ product: p, whatsappNumber }: { product: Produ
       const cart = await api<Cart>("/store/cart/items", { body: { variantId: variant.id, quantity: qty } });
       setCart(cart);
       toast(cart.notice ?? "Added to cart");
+      trackCommerceEvent("add_to_cart", { currency: "UGX", value: price * qty, items: [{ item_id: p.id, item_name: p.name, item_variant: variant.sku, price, quantity: qty }] });
       if (buyNow) router.push("/checkout");
     } catch (e) {
       toast((e as Error).message);
@@ -107,6 +109,7 @@ export function ProductPurchase({ product: p, whatsappNumber }: { product: Produ
                 );
               })}
             </div>
+            {axis.toLowerCase().includes("size") && <details className="mt-2 rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-600"><summary className="cursor-pointer font-semibold text-brand-700">Size guide</summary><p className="mt-2 leading-relaxed">Choose your usual clothing size. Imported products can vary slightly by maker, so check the product details and measurements where provided. If unsure, use WhatsApp support before ordering.</p></details>}
           </div>
         ))}
 

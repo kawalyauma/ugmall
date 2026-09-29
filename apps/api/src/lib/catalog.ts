@@ -61,6 +61,7 @@ export interface ListFilters {
   colour?: string;
   featured?: boolean;
   onSale?: boolean;
+  inStock?: boolean;
   productIds?: string[];
   sort?: "newest" | "price_asc" | "price_desc" | "popular" | "rating";
   limit: number;
@@ -91,6 +92,7 @@ export async function listProducts(db: Database, f: ListFilters) {
   if (f.size) where.push(sql`${f.size} = any(${products.sizes})`);
   if (f.colour) where.push(sql`lower(${f.colour}) = any(select lower(x) from unnest(${products.colours}) x)`);
   if (f.featured) where.push(eq(products.isFeatured, true));
+  if (f.inStock) where.push(sql`exists (select 1 from ${productVariants} v join ${inventoryLevels} l on l.variant_id = v.id where v.product_id = ${products.id} and v.is_active and greatest(l.on_hand - l.reserved, 0) > 0)`);
   const promos = await activePromotions(db);
   if (f.onSale) {
     // Discounted by its own sale price, or covered by a live percentage promotion.

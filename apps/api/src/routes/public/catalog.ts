@@ -84,6 +84,7 @@ catalogRoutes.get("/products", async (c) => {
     colour: q.colour,
     featured: q.featured === "1",
     onSale: q.sale === "1",
+    inStock: q.stock === "1",
     sort: (["newest", "price_asc", "price_desc", "popular", "rating"] as const).find((s) => s === q.sort),
     limit,
     offset,
@@ -270,4 +271,37 @@ catalogRoutes.get("/locations/:id", async (c) => {
     zone: r.zone ? { id: r.zone.id, name: r.zone.name, fee: r.zone.fee, isCalculated: r.zone.isCalculated, etaText: r.zone.etaText, methods: r.zone.methods } : null,
     moreSpecificMayDiffer: r.moreSpecificMayDiffer,
   });
+});
+
+
+const xmlEscape = (v: unknown) => String(v ?? "").replace(/[<>&"']/g, (ch) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&apos;" })[ch]!);
+const csvCell = (v: unknown) => { const s = String(v ?? ""); return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+
+catalogRoutes.get("/feeds/google.xml", async (c) => {
+  const { db } = c.get("container");
+  const [settings, result] = await Promise.all([getPublicSettings(db), listProducts(db, { limit: 5000, offset: 0, sort: "newest" })]);
+  const base = (process.env.STOREFRONT_URL ?? new URL(c.req.url).origin).replace(/\/$/, "");
+  const items = result.items.map((p) => {
+    const normal = p.compareAt && p.compareAt > p.price ? p.compareAt : p.price;
+    const sale = p.compareAt && p.compareAt > p.price ? p.price : null;
+    return `<item><g:id>${xmlEscape(p.sku || p.id)}</g:id><g:title>${xmlEscape(p.name)}</g:title><g:description>${xmlEscape(`${p.name} available from ${settings.shopName} in Uganda.`)}</g:description><g:link>${xmlEscape(`${base}/p/${p.slug}`)}</g:link>${p.image?.url ? `<g:image_link>${xmlEscape(p.image.medium ?? p.image.url)}</g:image_link>` : ""}<g:availability>${p.inStock ? "in_stock" : "out_of_stock"}</g:availability><g:condition>new</g:condition><g:price>${normal} UGX</g:price>${sale ? `<g:sale_price>${sale} UGX</g:sale_price>` : ""}${p.brand ? `<g:brand>${xmlEscape(p.brand)}</g:brand>` : ""}</item>`;
+  }).join("\n");
+  c.header("Content-Type", "application/xml; charset=utf-8");
+  c.header("Cache-Control", "public, max-age=900");
+  return c.body(`<?xml version="1.0" encoding="UTF-8"?><rss version="2.0" xmlns:g="http://base.google.com/ns/1.0"><channel><title>${xmlEscape(settings.shopName)}</title><link>${xmlEscape(base)}</link><description>Product feed for ${xmlEscape(settings.shopName)}</description>${items}</channel></rss>`);
+});
+
+catalogRoutes.get("/feeds/meta.csv", async (c) => {
+  const { db } = c.get("container");
+  const [settings, result] = await Promise.all([getPublicSettings(db), listProducts(db, { limit: 5000, offset: 0, sort: "newest" })]);
+  const base = (process.env.STOREFRONT_URL ?? new URL(c.req.url).origin).replace(/\/$/, "");
+  const header = ["id","title","description","availability","condition","price","link","image_link","brand","sale_price"];
+  const rows = result.items.map((p) => {
+    const normal = p.compareAt && p.compareAt > p.price ? p.compareAt : p.price;
+    const sale = p.compareAt && p.compareAt > p.price ? p.price : "";
+    return [p.sku || p.id, p.name, `${p.name} available from ${settings.shopName} in Uganda.`, p.inStock ? "in stock" : "out of stock", "new", `${normal} UGX`, `${base}/p/${p.slug}`, p.image?.medium ?? p.image?.url ?? "", p.brand ?? "", sale ? `${sale} UGX` : ""].map(csvCell).join(",");
+  });
+  c.header("Content-Type", "text/csv; charset=utf-8");
+  c.header("Cache-Control", "public, max-age=900");
+  return c.body([header.join(","), ...rows].join("\n"));
 });

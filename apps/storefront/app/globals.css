@@ -39,3 +39,6 @@ body {
 .prose-shop h3, .prose-shop h4, .prose-shop h5 { font-weight: 600; margin: 0.8rem 0 0.4rem; }
 .prose-shop table { border-collapse: collapse; margin: 0.5rem 0; }
 .prose-shop td, .prose-shop th { border: 1px solid #e5e7eb; padding: 0.25rem 0.5rem; }
+
+/* Custom disclosure rows use their own icon/text. */
+details > summary::-webkit-details-marker { display: none; }

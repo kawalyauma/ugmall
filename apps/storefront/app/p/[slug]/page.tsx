@@ -7,6 +7,7 @@ import type { ProductDetail, ShopSettings } from "@/lib/types";
 import { ProductGrid } from "@/components/product-card";
 import { ProductPurchase } from "./purchase";
 import { Reviews } from "./reviews";
+import { RecentlyViewedTracker } from "@/components/recently-viewed";
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -55,6 +56,7 @@ export default async function ProductPage({ params }: Props) {
   return (
     <div className="container-page py-4">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
+      <RecentlyViewedTracker product={{ id: p.id, name: p.name, slug: p.slug, sku: p.sku, price: p.price, compareAt: p.compareAt, discountPercent: p.discountPercent, image: p.images[0] ?? null, hoverImage: p.images[1] ?? null, category: p.category ? { name: p.category.name, slug: p.category.slug } : null, brand: p.brand, sizes: p.sizes, colours: p.colours, rating: p.rating, inStock: p.variants.some((v) => v.available > 0) }} />
       <nav className="mb-3 text-xs text-gray-500">
         <Link href="/">Home</Link>
         {p.category && (
