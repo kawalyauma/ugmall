@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Clock, Lock } from "lucide-react";
+import { AlertTriangle, Banknote, Clock, CreditCard, Lock, Smartphone } from "lucide-react";
 import {
   DELIVERY_METHOD_LABELS,
   PAYMENT_METHOD_LABELS,
@@ -16,6 +16,7 @@ import {
 } from "@ugmall/shared";
 import { api, ApiError } from "@/lib/api";
 import { AreaPicker, type AreaInfo } from "@/components/area-picker";
+import { AirtelBadge, CardBrands, MtnBadge, PesaPalBadge } from "@/components/payment-brands";
 import { useStore } from "@/components/providers";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
@@ -33,6 +34,13 @@ interface Quote {
 }
 
 const SAVED_KEY = "ugmall.checkout";
+const PAYMENT_ORDER: PaymentMethod[] = ["mtn_momo", "airtel_money", "card", "cash_on_delivery"];
+const PAYMENT_COPY: Record<OrderablePayment, { title: string; sub: string; icon: typeof Smartphone }> = {
+  mtn_momo: { title: "MTN Mobile Money", sub: "Approve a PIN prompt on your phone", icon: Smartphone },
+  airtel_money: { title: "Airtel Money", sub: "Approve a PIN prompt on your phone", icon: Smartphone },
+  card: { title: "Visa / Mastercard", sub: "Secure card checkout by PesaPal · Mobile Money also accepted", icon: CreditCard },
+  cash_on_delivery: { title: "Cash on Delivery", sub: "Pay the rider when your order arrives", icon: Banknote },
+};
 type OrderablePayment = Exclude<PaymentMethod, "pay_on_pickup">;
 
 export default function CheckoutPage() {
@@ -114,8 +122,11 @@ export default function CheckoutPage() {
   const codOk = codAllowed(orderTotal, codLimit);
   const paymentOptions = (settings.paymentMethods as PaymentMethod[])
     .filter((m): m is OrderablePayment => m !== "pay_on_pickup")
-    .sort((a, b) => (a === "card" ? -1 : b === "card" ? 1 : 0));
+    .sort((a, b) => PAYMENT_ORDER.indexOf(a) - PAYMENT_ORDER.indexOf(b));
   const usablePayments = paymentOptions.filter((m) => m !== "cash_on_delivery" || codOk);
+  // Mobile Money (Ssentezo) not responding: say so and point to PesaPal instead.
+  const degraded = new Set<PaymentMethod>((settings.paymentOptions ?? []).filter((o) => o.health === "degraded").map((o) => o.method));
+  const cardEnabled = paymentOptions.includes("card");
   useEffect(() => {
     if (usablePayments.length && !usablePayments.includes(f.paymentMethod)) set("paymentMethod", usablePayments[0]!);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -159,7 +170,7 @@ export default function CheckoutPage() {
     try {
       const { couponCode, notes, ...toSave } = f;
       localStorage.setItem(SAVED_KEY, JSON.stringify({ ...toSave, paymentPhone: "" }));
-      const r = await api<{ orderNumber: string; trackingToken: string; paymentRedirectUrl?: string }>("/store/checkout/place", {
+      const r = await api<{ orderNumber: string; trackingToken: string; paymentUrl?: string }>("/store/checkout/place", {
         body: {
           ...f,
           reservationId: hold?.id,
@@ -170,11 +181,9 @@ export default function CheckoutPage() {
         },
       });
       await refreshCart();
-      if (r.paymentRedirectUrl) {
-        window.location.assign(r.paymentRedirectUrl);
-        return;
-      }
-      router.push(`/orders/${r.orderNumber}?t=${r.trackingToken}&new=1`);
+      // Online payments continue on the payment page (MoMo prompt status, card checkout, fallback).
+      if (r.paymentUrl) router.push(`/orders/${r.orderNumber}/pay?t=${encodeURIComponent(r.trackingToken)}`);
+      else router.push(`/orders/${r.orderNumber}?t=${r.trackingToken}&new=1`);
     } catch (e) {
       toast((e as Error).message);
       if (e instanceof ApiError && e.status === 409) void reserve();
@@ -281,24 +290,51 @@ export default function CheckoutPage() {
 
         <section className="space-y-3 rounded-2xl border border-gray-200 bg-white p-4">
           <h2 className="font-semibold">Payment</h2>
+          {cardEnabled && [...degraded].some((m) => m !== "card") && (
+            <div className="flex gap-2 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+              <span>
+                Mobile Money prompts are slow right now. For the fastest checkout choose <b>Visa / Mastercard</b> — PesaPal also lets you pay with Mobile Money.
+              </span>
+            </div>
+          )}
           <div className="grid gap-2">
             {paymentOptions.map((m) => {
               const disabled = m === "cash_on_delivery" && !codOk;
+              const copy = PAYMENT_COPY[m];
+              const selected = f.paymentMethod === m;
               return (
-              <label key={m} className={cn("flex items-center gap-3 rounded-xl border p-3", disabled ? "cursor-not-allowed border-gray-200 bg-gray-50 text-gray-400" : "cursor-pointer", f.paymentMethod === m ? "border-brand-700 bg-brand-50" : !disabled && "border-gray-300")}>
-                <input type="radio" name="pm" disabled={disabled} checked={f.paymentMethod === m} onChange={() => set("paymentMethod", m)} className="accent-brand-700" />
-                <span className="font-medium">
-                  {m === "card" ? "PesaPal — Mobile Money or Card" : PAYMENT_METHOD_LABELS[m]}
-                  {m === "cash_on_delivery" && codLimit > 0 && (
+                <label
+                  key={m}
+                  className={cn(
+                    "flex items-center gap-3 rounded-xl border p-3 transition",
+                    disabled ? "cursor-not-allowed border-gray-200 bg-gray-50 text-gray-400" : "cursor-pointer hover:border-brand-500",
+                    selected ? "border-brand-700 bg-brand-50 ring-1 ring-brand-700" : !disabled && "border-gray-300",
+                  )}
+                >
+                  <input type="radio" name="pm" disabled={disabled} checked={selected} onChange={() => set("paymentMethod", m)} className="accent-brand-700" />
+                  <copy.icon className={cn("size-5 shrink-0", selected ? "text-brand-700" : "text-gray-400")} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium">{copy.title}</span>
                     <span className={cn("block text-xs font-normal", disabled ? "text-amber-700" : "text-gray-500")}>
-                      {disabled ? `Not available for orders above ${formatUGX(codLimit)} — pay with Mobile Money` : `For orders up to ${formatUGX(codLimit)}`}
+                      {m === "cash_on_delivery" && codLimit > 0
+                        ? disabled
+                          ? `Not available for orders above ${formatUGX(codLimit)} — pay online instead`
+                          : `For orders up to ${formatUGX(codLimit)}`
+                        : degraded.has(m)
+                          ? "Responding slowly right now"
+                          : copy.sub}
+                    </span>
+                  </span>
+                  {m === "mtn_momo" && <MtnBadge className="shrink-0" />}
+                  {m === "airtel_money" && <AirtelBadge className="shrink-0" />}
+                  {m === "card" && (
+                    <span className="flex shrink-0 flex-col items-end gap-1 sm:flex-row sm:items-center">
+                      <CardBrands />
+                      <PesaPalBadge className="hidden sm:inline-flex" />
                     </span>
                   )}
-                </span>
-                {m === "mtn_momo" && <span className="ml-auto rounded bg-yellow-300 px-2 text-xs font-bold text-black">MTN</span>}
-                {m === "airtel_money" && <span className="ml-auto rounded bg-red-600 px-2 text-xs font-bold text-white">airtel</span>}
-                {m === "card" && <span className="ml-auto rounded bg-brand-700 px-2 py-0.5 text-xs font-bold text-white">PesaPal</span>}
-              </label>
+                </label>
               );
             })}
           </div>
@@ -357,7 +393,7 @@ export default function CheckoutPage() {
           </div>
         </dl>
         <Button size="lg" className="w-full" onClick={placeOrder} loading={busy} disabled={!!holdError}>
-          <Lock className="size-4" /> {isMomo ? "Pay with Mobile Money" : "Place order"}
+          <Lock className="size-4" /> {isMomo ? "Continue to pay with Mobile Money" : f.paymentMethod === "card" ? "Continue to secure card payment" : "Place order"}
         </Button>
         <p className="text-center text-xs text-gray-500">No account needed. We'll send updates on WhatsApp.</p>
       </aside>

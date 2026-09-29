@@ -5,7 +5,7 @@ import { deliveries, orderItems, orderStatusHistory, orders, payments, staffUser
 import { CartError, OrderError } from "@ugmall/orders";
 import { DeliveryError } from "@ugmall/delivery";
 import { PaymentError } from "@ugmall/payments";
-import { checkoutSchema, ORDERABLE_DELIVERY_METHODS, normalizeUgPhone, ORDER_STATUS_LABELS, prettyUgPhone, ugPhone } from "@ugmall/shared";
+import { checkoutSchema, ORDERABLE_DELIVERY_METHODS, normalizeUgPhone, ORDER_STATUS_LABELS, PREPAID_METHODS, prettyUgPhone, ugPhone, type PaymentMethod } from "@ugmall/shared";
 import { ApiError, body, clientIp } from "../../lib/http";
 import { limit } from "../../middleware/security";
 import type { AppEnv } from "../../types";
@@ -101,6 +101,8 @@ checkoutRoutes.post(
         paymentMethod: result.order.paymentMethod,
         paymentMessage: result.paymentMessage,
         paymentRedirectUrl: result.paymentRedirectUrl,
+        paymentUrl: result.paymentUrl,
+        paymentUnavailable: result.paymentUnavailable,
       });
     } catch (err) {
       c.get("container").env.NODE_ENV !== "test" && console.warn("[checkout] failed", clientIp(c), (err as Error).message);
@@ -149,6 +151,7 @@ trackingRoutes.get("/:orderNumber", async (c) => {
       .limit(1),
   ]);
   const latestPayment = pays[0];
+  const registry = c.get("container").payments;
   return c.json({
     orderNumber: order.orderNumber,
     status: order.status,
@@ -173,9 +176,9 @@ trackingRoutes.get("/:orderNumber", async (c) => {
     canRetryPayment: order.status === "awaiting_payment",
     canCancel: order.status === "pending" || order.status === "awaiting_payment",
     canReview: order.status === "delivered",
-    latestPayment: latestPayment
-      ? { provider: latestPayment.provider, status: latestPayment.status, failureReason: latestPayment.failureReason, msisdn: latestPayment.msisdn ? prettyUgPhone(latestPayment.msisdn) : null }
-      : null,
+    latestPayment: latestPayment ? paymentView(latestPayment) : null,
+    // Online methods the customer can pay (or switch to) on the payment page.
+    paymentOptions: order.status === "awaiting_payment" ? registry.onlineOptions() : [],
     items: items.map((i) => ({
       id: i.id,
       productId: i.productId,
@@ -207,15 +210,32 @@ trackingRoutes.get("/:orderNumber/status", limit("order-status", 120, 60), async
   }
   const [fresh] = await db.select({ status: orders.status, paymentStatus: orders.paymentStatus }).from(orders).where(eq(orders.id, order.id));
   const [latest] = await db.select().from(payments).where(eq(payments.orderId, order.id)).orderBy(desc(payments.createdAt)).limit(1);
-  return c.json({ ...fresh, latestPayment: latest ? { status: latest.status, failureReason: latest.failureReason } : null });
+  return c.json({ ...fresh, latestPayment: latest ? paymentView(latest) : null });
 });
 
+/** What the storefront may know about a payment attempt. */
+function paymentView(p: typeof payments.$inferSelect) {
+  const raw = p.raw && typeof p.raw === "object" ? (p.raw as Record<string, unknown>) : {};
+  return {
+    id: p.id,
+    provider: p.provider,
+    method: p.method,
+    status: p.status,
+    amount: p.amount,
+    failureReason: p.failureReason,
+    msisdn: p.msisdn ? prettyUgPhone(p.msisdn) : null,
+    // PesaPal's hosted checkout page for this attempt, while it can still be paid.
+    checkoutUrl: p.status === "pending" && p.provider === "pesapal" && typeof raw.redirect_url === "string" ? raw.redirect_url : null,
+    createdAt: p.createdAt,
+  };
+}
+
 trackingRoutes.post("/:orderNumber/retry-payment", limit("retry-payment", 5, 600), async (c) => {
-  const input = await body(c, z.object({ t: z.string().optional(), msisdn: ugPhone.optional() }));
+  const input = await body(c, z.object({ t: z.string().optional(), msisdn: ugPhone.optional(), method: z.enum(PREPAID_METHODS as [PaymentMethod, ...PaymentMethod[]]).optional() }));
   const order = await findTrackedOrder(c, c.req.param("orderNumber"), input.t);
   try {
-    const r = await c.get("container").orders.retryPayment(order.id, input.msisdn);
-    return c.json({ ok: r.status !== "failed", message: r.customerMessage ?? r.failureReason, redirectUrl: r.redirectUrl });
+    const r = await c.get("container").orders.retryPayment(order.id, { msisdn: input.msisdn, method: input.method });
+    return c.json({ ok: r.status !== "failed" && !r.providerUnavailable, message: r.customerMessage ?? r.failureReason, redirectUrl: r.redirectUrl, providerUnavailable: r.providerUnavailable });
   } catch (err) {
     mapDomainError(err);
   }

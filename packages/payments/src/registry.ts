@@ -43,7 +43,60 @@ export class PaymentRegistry {
   providers(): PaymentProvider[] {
     return [...this.byId.values()];
   }
+
+  /**
+   * The method a customer can switch to when their chosen online method's
+   * provider is down (e.g. Ssentezo unreachable -> pay by card/MoMo on
+   * PesaPal's hosted page). Null when no different provider can take over.
+   */
+  fallbackMethod(method: PaymentMethod): PaymentMethod | null {
+    const primary = this.byMethod.get(method);
+    const fallback = this.byMethod.get("card");
+    if (!fallback || !primary || fallback === primary || primary.offline) return null;
+    return "card";
+  }
+
+  /* ------------------------------------------------------------ health */
+
+  private outcomes = new Map<string, { failures: number[]; lastSuccess: number }>();
+
+  /** Record whether a call to start a payment reached the provider. */
+  recordOutcome(providerId: string, ok: boolean, now = Date.now()) {
+    const h = this.outcomes.get(providerId) ?? { failures: [], lastSuccess: 0 };
+    if (ok) {
+      h.failures = [];
+      h.lastSuccess = now;
+    } else {
+      h.failures = [...h.failures.filter((t) => now - t < HEALTH_WINDOW_MS), now];
+    }
+    this.outcomes.set(providerId, h);
+  }
+
+  /**
+   * "degraded" after HEALTH_FAILURES consecutive start-payment errors inside
+   * HEALTH_WINDOW_MS, so the storefront can steer customers to the fallback
+   * instead of letting them wait for a prompt that will never arrive.
+   */
+  health(providerId: string, now = Date.now()): "ok" | "degraded" {
+    const h = this.outcomes.get(providerId);
+    if (!h) return "ok";
+    const recent = h.failures.filter((t) => now - t < HEALTH_WINDOW_MS);
+    return recent.length >= HEALTH_FAILURES ? "degraded" : "ok";
+  }
+
+  /** Enabled online methods with who handles them and whether that provider is healthy. */
+  onlineOptions(now = Date.now()) {
+    return this.enabledMethods()
+      .filter((m) => !this.byMethod.get(m)!.offline)
+      .map((method) => {
+        const p = this.byMethod.get(method)!;
+        return { method, provider: p.id, providerName: p.displayName, health: this.health(p.id, now), fallbackMethod: this.fallbackMethod(method) };
+      });
+  }
 }
+
+const HEALTH_WINDOW_MS = 10 * 60_000;
+const HEALTH_FAILURES = 3;
 
 export function createPaymentRegistryFromEnv(env: NodeJS.ProcessEnv = process.env): PaymentRegistry {
   const registry = new PaymentRegistry();
@@ -52,6 +105,8 @@ export function createPaymentRegistryFromEnv(env: NodeJS.ProcessEnv = process.en
   // registered (with no methods) so refunds of old pickup orders still work.
   registry.register(new PayOnPickupProvider(), []);
 
+  // Mobile Money (MTN + Airtel) goes through Ssentezo: the customer gets a PIN
+  // prompt on their phone without leaving the shop.
   const mobile = (env.PAYMENT_MOBILE_MONEY_PROVIDER ?? "ssentezo").toLowerCase();
   if (mobile === "ssentezo") {
     if (env.SSENTEZO_USERNAME && env.SSENTEZO_PASSWORD) {
@@ -68,7 +123,11 @@ export function createPaymentRegistryFromEnv(env: NodeJS.ProcessEnv = process.en
       console.warn("[payments] SSENTEZO_USERNAME/PASSWORD not set — mobile money is disabled");
     }
   }
-  if (mobile === "pesapal") {
+
+  // Cards (Visa/Mastercard) go through PesaPal's hosted checkout. It also
+  // accepts Mobile Money, so it doubles as the fallback when Ssentezo is down.
+  const card = (env.PAYMENT_CARD_PROVIDER ?? "pesapal").toLowerCase();
+  if (card === "pesapal" || mobile === "pesapal") {
     if (env.PESAPAL_CONSUMER_KEY && env.PESAPAL_CONSUMER_SECRET && env.PESAPAL_IPN_ID) {
       const pesapal = new PesaPalProvider({
         consumerKey: env.PESAPAL_CONSUMER_KEY,
@@ -77,18 +136,18 @@ export function createPaymentRegistryFromEnv(env: NodeJS.ProcessEnv = process.en
         environment: env.PESAPAL_ENV === "live" ? "live" : "sandbox",
         baseUrl: env.PESAPAL_BASE_URL || undefined,
       });
-      // PesaPal presents Mobile Money and card choices together on its hosted
-      // checkout, so expose one clear customer-facing option instead of three.
+      // Only "card" is mapped: PesaPal shows its own Mobile Money and card
+      // choices on the hosted page, so one customer-facing option is enough.
       registry.register(pesapal, ["card"]);
     } else if (env.NODE_ENV === "production") {
-      console.warn("[payments] PESAPAL_CONSUMER_KEY/SECRET/IPN_ID not set — online payment is disabled");
+      console.warn("[payments] PESAPAL_CONSUMER_KEY/SECRET/IPN_ID not set — card payments are disabled");
     }
   }
+
   if (mobile === "fake" || (env.PAYMENTS_FAKE === "true" && !registry.enabledMethods().includes("mtn_momo"))) {
     if (env.NODE_ENV === "production") throw new PaymentError("The fake payment provider cannot run in production", "CONFIG");
-    registry.register(new FakeMobileMoneyProvider(Number(env.PAYMENTS_FAKE_DELAY_MS ?? 3000)), ["mtn_momo", "airtel_money"]);
+    const fake = new FakeMobileMoneyProvider(Number(env.PAYMENTS_FAKE_DELAY_MS ?? 3000));
+    registry.register(fake, registry.enabledMethods().includes("card") ? ["mtn_momo", "airtel_money"] : ["mtn_momo", "airtel_money", "card"]);
   }
-  // Card: Ssentezo's public API covers mobile money; plug a card-capable
-  // provider (Flutterwave/Pesapal) in here when one is contracted.
   return registry;
 }

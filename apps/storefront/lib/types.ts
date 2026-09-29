@@ -76,6 +76,16 @@ export interface ShopSettings {
   socialInstagram: string;
   socialTiktok: string;
   paymentMethods: string[];
+  /** Online methods, who processes them and whether that provider is currently healthy. */
+  paymentOptions?: PaymentOption[];
+}
+
+export interface PaymentOption {
+  method: "mtn_momo" | "airtel_money" | "card";
+  provider: string;
+  providerName: string;
+  health: "ok" | "degraded";
+  fallbackMethod: "card" | null;
 }
 
 export interface CartLine {

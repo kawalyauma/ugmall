@@ -23,7 +23,7 @@ import {
 } from "@ugmall/database";
 import { inventory, type StockReservations } from "@ugmall/inventory";
 import { DeliveryError, quoteDelivery, resolveLocation, type ResolvedLocation } from "@ugmall/delivery";
-import type { PaymentRegistry, VerifyPaymentResult } from "@ugmall/payments";
+import { PaymentError, type InitiatePaymentResult, type PaymentRegistry, type VerifyPaymentResult } from "@ugmall/payments";
 import type { NotificationEvent } from "@ugmall/notifications";
 import {
   codAllowed,
@@ -102,6 +102,11 @@ export class OrderService {
 
   trackingUrl(order: Pick<Order, "orderNumber" | "trackingToken">) {
     return `${this.config.storefrontUrl.replace(/\/$/, "")}/orders/${order.orderNumber}?t=${order.trackingToken}`;
+  }
+
+  /** The storefront payment page; hosted checkouts (PesaPal) send the customer back here. */
+  paymentUrl(order: Pick<Order, "orderNumber" | "trackingToken">) {
+    return `${this.config.storefrontUrl.replace(/\/$/, "")}/orders/${order.orderNumber}/pay?t=${order.trackingToken}`;
   }
 
   /* ------------------------------------------------------------ quoting */
@@ -341,16 +346,26 @@ export class OrderService {
 
     let paymentMessage: string | undefined;
     let paymentRedirectUrl: string | undefined;
+    let paymentUnavailable = false;
     if (prepaid) {
       const result = await this.startPayment(order, payment);
-      paymentMessage = result.customerMessage;
+      paymentMessage = result.customerMessage ?? result.failureReason;
       paymentRedirectUrl = result.redirectUrl;
+      paymentUnavailable = result.providerUnavailable;
       await this.effects.scheduleOrderExpiry(order.id, this.config.paymentTimeoutMinutes * 60_000 + 5_000);
     } else {
       paymentMessage = (await provider.initiatePayment(this.paymentRequest(order, payment))).customerMessage;
     }
     await this.effects.notify("order_received", order.id);
-    return { order, payment, paymentMessage, paymentRedirectUrl, trackingUrl: this.trackingUrl(order) };
+    return {
+      order,
+      payment,
+      paymentMessage,
+      paymentRedirectUrl,
+      paymentUnavailable,
+      paymentUrl: prepaid ? this.paymentUrl(order) : undefined,
+      trackingUrl: this.trackingUrl(order),
+    };
   }
 
   /** Cash on Delivery ceiling from Settings (key codMaxOrderTotal); 0 = no limit. */
@@ -372,22 +387,37 @@ export class OrderService {
       email: order.email ?? undefined,
       description: `Order ${order.orderNumber}`,
       callbackUrl: `${this.config.apiPublicUrl.replace(/\/$/, "")}/webhooks/payments/${payment.provider}`,
-      returnUrl: this.trackingUrl(order),
+      returnUrl: `${this.paymentUrl(order)}&return=1`,
     };
   }
 
-  private async startPayment(order: Order, payment: Payment) {
+  private async startPayment(order: Order, payment: Payment): Promise<InitiatePaymentResult & { providerUnavailable: boolean }> {
     const provider = this.paymentsRegistry.byProviderId(payment.provider);
-    let result;
+    let result: InitiatePaymentResult;
+    let providerUnavailable = false;
     try {
       result = await provider.initiatePayment(this.paymentRequest(order, payment));
+      this.paymentsRegistry.recordOutcome(provider.id, true);
     } catch (err) {
-      result = { status: "pending" as const, failureReason: (err as Error).message, raw: { error: (err as Error).message } };
+      // The provider could not be reached or refused the call. Keep the payment
+      // pending (a timed-out request may still have sent the prompt; the poller
+      // settles it) but tell the customer so they can switch to the fallback.
+      const invalid = err instanceof PaymentError && err.code === "INVALID_REQUEST";
+      if (!invalid) this.paymentsRegistry.recordOutcome(provider.id, false);
+      providerUnavailable = !invalid;
+      const failureReason = invalid
+        ? (err as Error).message
+        : `${provider.displayName} is not responding right now. You can try again or pay another way.`;
+      result = { status: "pending", failureReason, raw: { error: (err as Error).message } };
     }
     await this.db.insert(paymentEvents).values({ paymentId: payment.id, provider: provider.id, kind: "initiate", payload: (result.raw ?? result) as object });
     await this.db
       .update(payments)
-      .set({ providerReference: result.providerReference ?? null, raw: (result.raw ?? null) as object | null })
+      .set({
+        providerReference: result.providerReference ?? null,
+        raw: (result.raw ?? null) as object | null,
+        failureReason: result.status === "pending" ? (result.failureReason ?? null) : null,
+      })
       .where(eq(payments.id, payment.id));
     if (result.status === "failed") {
       await this.applyPaymentResult(payment.externalReference, { externalReference: payment.externalReference, status: "failed", failureReason: result.failureReason });
@@ -395,15 +425,24 @@ export class OrderService {
       // Poll in case the callback never reaches our server (ISP/tunnel hiccups).
       await this.effects.schedulePaymentCheck(payment.id, 15_000);
     }
-    return result;
+    return { ...result, providerUnavailable };
   }
 
-  /** Customer asks for a new MoMo prompt (e.g. first one timed out or wrong number). */
-  async retryPayment(orderId: string, msisdn?: string) {
-    const order = await this.getOrder(orderId);
+  /**
+   * Customer asks for a new payment attempt: a fresh MoMo prompt (first one
+   * timed out, wrong number) or a switch to another online method, e.g. from
+   * Ssentezo Mobile Money to PesaPal when Mobile Money is not working.
+   */
+  async retryPayment(orderId: string, opts: { msisdn?: string; method?: PaymentMethod } = {}) {
+    let order = await this.getOrder(orderId);
     if (order.status !== "awaiting_payment") throw new OrderError("This order is not waiting for payment");
-    const phone = msisdn ? normalizeUgPhone(msisdn) : order.phone;
+    const phone = opts.msisdn ? normalizeUgPhone(opts.msisdn) : order.phone;
     if (!phone) throw new OrderError("Invalid mobile money number");
+    if (opts.method && opts.method !== order.paymentMethod) {
+      if (!isPrepaid(opts.method)) throw new OrderError("Choose Mobile Money or card to pay online", "PAYMENT");
+      this.paymentsRegistry.forMethod(opts.method); // throws when that method is not enabled
+      [order] = (await this.db.update(orders).set({ paymentMethod: opts.method }).where(eq(orders.id, orderId)).returning()) as [Order];
+    }
     const pending = await this.db
       .select()
       .from(payments)

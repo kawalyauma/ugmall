@@ -88,8 +88,9 @@ pnpm typecheck
 
 In development WhatsApp messages are printed by the worker, OTP codes are returned
 by the API, and the fake Mobile Money provider approves payments after a few seconds.
-To try the PesaPal sandbox, set `PAYMENT_MOBILE_MONEY_PROVIDER=pesapal`,
-`PESAPAL_ENV=sandbox`, your sandbox credentials and the registered `PESAPAL_IPN_ID`.
+To try the real sandboxes, set `PAYMENT_MOBILE_MONEY_PROVIDER=ssentezo` with `SSENTEZO_ENV=sandbox`
+and your Ssentezo sandbox credentials, and/or `PESAPAL_ENV=sandbox` with your PesaPal sandbox
+credentials and the registered `PESAPAL_IPN_ID` (card payments).
 
 After changing `packages/database/src/schema.ts`, generate a migration with
 `pnpm db:generate` and commit the SQL in `packages/database/migrations`.
@@ -134,19 +135,28 @@ Point `shop.example.ug` and `admin.shop.example.ug` to the server:
 ### 3. Configure and start
 ```bash
 cp .env.example .env && chmod 600 .env
-nano .env        # domains, passwords, APP_SECRET, PAYMENT_CALLBACK_SECRET, PesaPal, WhatsApp
+nano .env        # domains, passwords, APP_SECRET, PAYMENT_CALLBACK_SECRET, Ssentezo, PesaPal, WhatsApp
 ./scripts/deploy.sh --seed     # builds images, runs migrations, starts everything, seeds roles/zones/owner
 ```
 Subsequent updates: `git pull && ./scripts/deploy.sh` (takes a backup first).
 Add more staff and riders in **Admin → Staff & roles**.
 
-### 4. PesaPal
+### 4. Payments: Ssentezo (Mobile Money) + PesaPal (cards and fallback)
+**Ssentezo** handles MTN Mobile Money and Airtel Money — the customer gets a PIN prompt on their phone.
+1. Get your Ssentezo Wallet API username and password (sandbox first, then live).
+2. Set `PAYMENT_MOBILE_MONEY_PROVIDER=ssentezo`, `SSENTEZO_USERNAME`, `SSENTEZO_PASSWORD`,
+   `SSENTEZO_ENV=live` and a long random `PAYMENT_CALLBACK_SECRET` in `.env`.
+
+**PesaPal** handles Visa/Mastercard through its hosted checkout, embedded on the shop's payment page
+(`/orders/<number>/pay`). It is also the fallback: if Ssentezo stops responding, the payment page says
+so and offers PesaPal (which also accepts Mobile Money) with one tap.
 1. Create PesaPal API 3.0 credentials (sandbox first, then live).
 2. Register `https://<SHOP_DOMAIN>/api/webhooks/payments/pesapal` as a POST IPN URL and copy its IPN ID.
-3. Set `PAYMENT_MOBILE_MONEY_PROVIDER=pesapal`, `PESAPAL_CONSUMER_KEY`,
-   `PESAPAL_CONSUMER_SECRET`, `PESAPAL_IPN_ID`, and `PESAPAL_ENV=live` in `.env`, then redeploy.
-4. Customers are redirected to PesaPal to choose Mobile Money or card. IPNs and the worker both
-   verify the authoritative transaction status before an order is marked paid.
+3. Set `PESAPAL_CONSUMER_KEY`, `PESAPAL_CONSUMER_SECRET`, `PESAPAL_IPN_ID` and `PESAPAL_ENV=live`.
+   Set `PAYMENT_CARD_PROVIDER=none` to turn card payments off.
+
+Redeploy after changing `.env`. Callbacks/IPNs and the worker both verify the authoritative
+transaction status with the provider before an order is marked paid.
 
 ### 5. WhatsApp Business
 Set `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_APP_SECRET`,

@@ -12,7 +12,7 @@ export const catalogRoutes = new Hono<AppEnv>();
 catalogRoutes.get("/settings", async (c) => {
   const { db, payments } = c.get("container");
   c.header("Cache-Control", "public, max-age=60");
-  return c.json({ ...(await getPublicSettings(db)), paymentMethods: payments.enabledMethods() });
+  return c.json({ ...(await getPublicSettings(db)), paymentMethods: payments.enabledMethods(), paymentOptions: payments.onlineOptions() });
 });
 
 catalogRoutes.get("/categories", async (c) => {

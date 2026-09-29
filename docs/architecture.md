@@ -28,7 +28,7 @@ owner's own server with Docker; there is no dependency on cloud object storage.
 | `packages/database` | Drizzle schema, SQL migrations, DB client |
 | `packages/auth` | scrypt password hashing, Redis sessions, phone OTP, rate limiting |
 | `packages/storage` | `StorageProvider` interface, `LocalFilesystemProvider`, `S3CompatibleProvider` (MinIO), image processing, signed private links |
-| `packages/payments` | `PaymentProvider` interface, **Ssentezo Wallet**, Cash on Delivery, Pay on Pickup, dev fake provider, registry |
+| `packages/payments` | `PaymentProvider` interface, **Ssentezo Wallet**, **PesaPal**, Cash on Delivery, Pay on Pickup, dev fake provider, registry |
 | `packages/inventory` | Variant-level stock ledger with audit trail, Redis checkout reservations |
 | `packages/orders` | Pricing, coupons, order placement, lifecycle transitions, payments application, riders, refunds, returns |
 | `packages/delivery` | Delivery fee calculation, Uganda area tree (region › district › division › parish › village), zone resolution by nearest area with a zone, bundled area data |
@@ -75,7 +75,12 @@ Allowed transitions live in `packages/shared/src/order-status.ts`; every change 
 - The worker also polls pending payments (15s → 5min back-off) in case callbacks cannot reach the server.
 - Refunds use `withdraw` to the customer's number.
 
-To add Flutterwave, Pesapal, or MTN/Airtel direct APIs: implement `PaymentProvider`
+## Payments (PesaPal — cards and fallback)
+- `card` maps to PesaPal's hosted checkout (`SubmitOrderRequest`), shown in an iframe on the storefront payment page; `redirect_mode=TOP_WINDOW` brings the customer back to `/orders/<n>/pay?return=1`.
+- IPNs are verified with `GetTransactionStatus` before anything is applied.
+- The registry records whether each start-payment call reached the provider. Three failures in 10 minutes mark the provider **degraded**; the payment page then recommends PesaPal, and `retry-payment` with `method: "card"` switches an unpaid order over.
+
+To add Flutterwave or MTN/Airtel direct APIs: implement `PaymentProvider`
 in `packages/payments/src/<name>.ts` and register it in `registry.ts`.
 
 ## Storage

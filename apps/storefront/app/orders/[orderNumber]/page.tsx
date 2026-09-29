@@ -8,7 +8,6 @@ import { DELIVERY_METHOD_LABELS, PAYMENT_METHOD_LABELS, TRACKING_STEPS, ORDER_ST
 import { api } from "@/lib/api";
 import { useStore } from "@/components/providers";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 interface Tracked {
@@ -47,8 +46,6 @@ export default function OrderPage({ params }: { params: Promise<{ orderNumber: s
   const { settings, toast } = useStore();
   const [order, setOrder] = useState<Tracked | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [retryPhone, setRetryPhone] = useState("");
-  const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -72,22 +69,6 @@ export default function OrderPage({ params }: { params: Promise<{ orderNumber: s
     return () => clearInterval(iv);
   }, [order, orderNumber, t, load]);
 
-  async function retry() {
-    setBusy(true);
-    try {
-      const r = await api<{ message?: string; redirectUrl?: string }>(`/store/orders/${orderNumber}/retry-payment`, { body: { t, msisdn: retryPhone || undefined } });
-      if (r.redirectUrl) {
-        window.location.assign(r.redirectUrl);
-        return;
-      }
-      toast(r.message ?? "Payment started");
-      await load();
-    } catch (e) {
-      toast((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
   async function cancel() {
     if (!confirm("Cancel this order?")) return;
     await api(`/store/orders/${orderNumber}/cancel`, { body: { t } }).then(load, (e) => toast((e as Error).message));
@@ -97,7 +78,6 @@ export default function OrderPage({ params }: { params: Promise<{ orderNumber: s
   if (!order) return <div className="container-page py-16 text-center text-gray-400">Loading…</div>;
 
   const cancelled = order.status === "cancelled";
-  const isPesaPal = order.latestPayment?.provider === "pesapal";
   const stepIdx = Math.max(
     0,
     TRACKING_STEPS.findIndex((s) => s === order.status) >= 0
@@ -122,29 +102,17 @@ export default function OrderPage({ params }: { params: Promise<{ orderNumber: s
       {order.status === "awaiting_payment" && (
         <div className="space-y-3 rounded-2xl border-2 border-amber-300 bg-amber-50 p-4">
           <div className="flex items-center gap-2 text-lg font-bold">
-            <Smartphone className="size-5" /> {isPesaPal ? "Complete your secure payment" : "Approve payment on your phone"}
+            <Smartphone className="size-5" /> Waiting for your payment
           </div>
-          {order.latestPayment?.status === "failed" ? (
-            <p className="text-sm text-red-700">Payment failed{order.latestPayment.failureReason ? `: ${order.latestPayment.failureReason}` : ""}. Try again below.</p>
-          ) : isPesaPal ? (
-            <p className="text-sm">Pay <b>{formatUGX(order.total - order.amountPaid)}</b> securely through PesaPal using Mobile Money or a bank card. This page updates automatically after payment.</p>
-          ) : (
-            <p className="text-sm">
-              We sent {order.paymentMethod === "mtn_momo" ? "an" : "a"} {PAYMENT_METHOD_LABELS[order.paymentMethod]} prompt for <b>{formatUGX(order.total - order.amountPaid)}</b> to <b>{order.latestPayment?.msisdn ?? order.phone}</b>. Enter your PIN to
-              approve. This page updates automatically.
-            </p>
-          )}
-          {isPesaPal ? (
-            <Button onClick={retry} loading={busy} className="w-full">Continue to PesaPal</Button>
-          ) : (
-            <>
-              <p className="text-xs text-gray-600">No prompt? Dial *165# (MTN) or *185# (Airtel) → check pending approvals, or resend below.</p>
-              <div className="flex gap-2">
-                <Input value={retryPhone} onChange={(e) => setRetryPhone(e.target.value)} placeholder="Other number (optional)" inputMode="tel" />
-                <Button onClick={retry} loading={busy} variant="secondary" className="shrink-0">Resend prompt</Button>
-              </div>
-            </>
-          )}
+          <p className="text-sm">
+            {order.latestPayment?.status === "failed"
+              ? `The last payment attempt didn't go through${order.latestPayment.failureReason ? `: ${order.latestPayment.failureReason}` : ""}. `
+              : ""}
+            Pay <b>{formatUGX(order.total - order.amountPaid)}</b> with Mobile Money or card to confirm your order.
+          </p>
+          <Link href={`/orders/${order.orderNumber}/pay?t=${encodeURIComponent(t)}`} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-brand-700 text-sm font-semibold text-white">
+            Continue to payment
+          </Link>
           {order.expiresAt && <p className="text-xs text-gray-500">Unpaid orders are cancelled automatically at {new Date(order.expiresAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}.</p>}
         </div>
       )}
@@ -230,7 +198,7 @@ export default function OrderPage({ params }: { params: Promise<{ orderNumber: s
           <div className="flex justify-between text-gray-600">
             <dt>Payment</dt>
             <dd>
-              {isPesaPal ? "PesaPal" : PAYMENT_METHOD_LABELS[order.paymentMethod]} · {order.amountPaid >= order.total ? "Paid" : order.amountPaid > 0 ? `Paid ${formatUGX(order.amountPaid)}` : "Not paid"}
+              {order.paymentMethod === "card" ? "Card (PesaPal)" : PAYMENT_METHOD_LABELS[order.paymentMethod]} · {order.amountPaid >= order.total ? "Paid" : order.amountPaid > 0 ? `Paid ${formatUGX(order.amountPaid)}` : "Not paid"}
             </dd>
           </div>
         </dl>
