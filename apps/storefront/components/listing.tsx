@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { SlidersHorizontal, X } from "lucide-react";
 import { serverGet } from "@/lib/api";
-import type { ProductCard } from "@/lib/types";
+import type { Category, ProductCard } from "@/lib/types";
 import { ProductGrid } from "./product-card";
 import { cn } from "@/lib/utils";
 
@@ -27,7 +27,7 @@ function Hidden({ name, value }: { name: string; value?: string }) {
   return value ? <input type="hidden" name={name} value={value} /> : null;
 }
 
-function FilterPanel({ basePath, sp, brands, sizes, colours }: { basePath: string; sp: Record<string, string | undefined>; brands: Brand[]; sizes: string[]; colours: string[] }) {
+function FilterPanel({ basePath, sp, brands, categories, sizes, colours, showCategory }: { basePath: string; sp: Record<string, string | undefined>; brands: Brand[]; categories: Category[]; sizes: string[]; colours: string[]; showCategory: boolean }) {
   return (
     <div className="space-y-5">
       <form action={basePath} method="get" className="space-y-4">
@@ -35,6 +35,16 @@ function FilterPanel({ basePath, sp, brands, sizes, colours }: { basePath: strin
         <Hidden name="size" value={sp.size} />
         <Hidden name="colour" value={sp.colour} />
         <Hidden name="featured" value={sp.featured} />
+        {showCategory && (
+          <div>
+            <label htmlFor="category" className="mb-1 block text-xs font-bold uppercase tracking-wide text-gray-500">Category / department</label>
+            <select id="category" name="category" defaultValue={sp.category ?? ""} className="h-10 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm">
+              <option value="">All categories</option>
+              {categories.filter((c) => !c.parentId).map((c) => <option key={c.id} value={c.slug}>{c.name}</option>)}
+              {categories.filter((c) => c.parentId).slice(0, 80).map((c) => <option key={c.id} value={c.slug}>— {c.name}</option>)}
+            </select>
+          </div>
+        )}
         <div>
           <label htmlFor="sort" className="mb-1 block text-xs font-bold uppercase tracking-wide text-gray-500">Sort</label>
           <select id="sort" name="sort" defaultValue={sp.sort ?? "newest"} className="h-10 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm">
@@ -68,7 +78,7 @@ function FilterPanel({ basePath, sp, brands, sizes, colours }: { basePath: strin
 
 export async function Listing({ basePath, fixed, searchParams, title, subtitle }: { basePath: string; fixed: Record<string, string>; searchParams: SearchParams; title: string; subtitle?: string }) {
   const sp: Record<string, string | undefined> = {};
-  for (const k of ["sort", "size", "colour", "min", "max", "page", "q", "sale", "brand", "stock", "featured"]) {
+  for (const k of ["sort", "size", "colour", "min", "max", "page", "q", "sale", "brand", "stock", "featured", "category"]) {
     const v = searchParams[k];
     sp[k] = Array.isArray(v) ? v[0] : v;
   }
@@ -76,14 +86,16 @@ export async function Listing({ basePath, fixed, searchParams, title, subtitle }
   const query = new URLSearchParams({ ...fixed, limit: "24", page: String(page) });
   for (const [k, v] of Object.entries(sp)) if (v && k !== "page") query.set(k, v);
 
-  const [data, brands] = await Promise.all([
+  const [data, brands, categories] = await Promise.all([
     serverGet<{ items: ProductCard[]; total: number }>(`/store/products?${query}`, { revalidate: 20 }),
     serverGet<Brand[]>("/store/brands", { revalidate: 120 }).catch(() => []),
+    serverGet<Category[]>("/store/categories", { revalidate: 120 }).catch(() => []),
   ]);
   const sizes = [...new Set(data.items.flatMap((p) => p.sizes))].slice(0, 24);
   const colours = [...new Set(data.items.flatMap((p) => p.colours))].slice(0, 24);
   const pages = Math.max(1, Math.ceil(data.total / 24));
-  const hasFilters = ["size", "colour", "min", "max", "sale", "brand", "stock"].some((k) => Boolean(sp[k]));
+  const hasFilters = ["size", "colour", "min", "max", "sale", "brand", "stock", "category"].some((k) => Boolean(sp[k]));
+  const showCategory = !fixed.category;
 
   return (
     <div className="container-page py-5">
@@ -102,13 +114,13 @@ export async function Listing({ basePath, fixed, searchParams, title, subtitle }
           <span className="flex items-center gap-2"><SlidersHorizontal className="size-4" /> Filters {hasFilters && <span className="size-2 rounded-full bg-accent" />}</span>
           {hasFilters && <Link href={sp.q ? `${basePath}?q=${encodeURIComponent(sp.q)}` : basePath} className="flex items-center gap-1 text-xs font-medium text-gray-500" onClick={(e) => e.stopPropagation()}><X className="size-3" /> Clear</Link>}
         </summary>
-        <div className="mt-4 border-t border-gray-100 pt-4"><FilterPanel basePath={basePath} sp={sp} brands={brands} sizes={sizes} colours={colours} /></div>
+        <div className="mt-4 border-t border-gray-100 pt-4"><FilterPanel basePath={basePath} sp={sp} brands={brands} categories={categories} sizes={sizes} colours={colours} showCategory={showCategory} /></div>
       </details>
 
       <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
         <aside className="hidden h-fit rounded-2xl border border-gray-200 bg-white p-4 lg:sticky lg:top-32 lg:block">
           <div className="mb-4 flex items-center justify-between"><div className="flex items-center gap-2 font-bold"><SlidersHorizontal className="size-4" /> Filters</div>{hasFilters && <Link href={sp.q ? `${basePath}?q=${encodeURIComponent(sp.q)}` : basePath} className="text-xs text-brand-700 hover:underline">Clear</Link>}</div>
-          <FilterPanel basePath={basePath} sp={sp} brands={brands} sizes={sizes} colours={colours} />
+          <FilterPanel basePath={basePath} sp={sp} brands={brands} categories={categories} sizes={sizes} colours={colours} showCategory={showCategory} />
         </aside>
 
         <div>
