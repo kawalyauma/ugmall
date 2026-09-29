@@ -10,6 +10,7 @@ import { ApiError, body, clientIp } from "../../lib/http";
 import { limit } from "../../middleware/security";
 import type { AppEnv } from "../../types";
 import { clearCart, getCartId, readCartLines } from "./cart";
+import { learn } from "../../lib/shopper";
 
 export const checkoutRoutes = new Hono<AppEnv>();
 
@@ -92,6 +93,8 @@ checkoutRoutes.post(
         { source: "web", customerId: c.get("customer")?.id ?? null },
       );
       await clearCart(c);
+      const bought = await c.get("container").db.select({ productId: orderItems.productId }).from(orderItems).where(eq(orderItems.orderId, result.order.id));
+      await learn(c, (s) => c.get("container").recommendations.recordPurchase(s, bought.flatMap((b) => (b.productId ? [b.productId] : []))));
       return c.json({
         orderNumber: result.order.orderNumber,
         trackingToken: result.order.trackingToken,

@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { serverGet } from "@/lib/api";
+import { TrackBrowse } from "./recs";
 import type { ProductCard } from "@/lib/types";
 import { ProductGrid } from "./product-card";
 import { cn } from "@/lib/utils";
@@ -7,6 +9,7 @@ import { cn } from "@/lib/utils";
 export type SearchParams = Record<string, string | string[] | undefined>;
 
 const SORTS = [
+  ["foryou", "For you"],
   ["newest", "Newest"],
   ["popular", "Popular"],
   ["price_asc", "Price: low to high"],
@@ -30,12 +33,23 @@ export async function Listing({ basePath, fixed, searchParams, title, subtitle }
   const page = Math.max(1, Number(sp.page ?? 1));
   const query = new URLSearchParams({ ...fixed, limit: "24" });
   for (const [k, v] of Object.entries(sp)) if (v) query.set(k, v);
-  const data = await serverGet<{ items: ProductCard[]; total: number }>(`/store/products?${query}`, { revalidate: 20 });
+  if (!query.has("sort")) query.set("sort", "foryou");
+  // "For you" is personal: forward the shopper's cookies and skip the shared cache.
+  const personal = query.get("sort") === "foryou";
+  const cookie = personal
+    ? (await cookies())
+        .getAll()
+        .filter((c) => c.name === "ugm_vid" || c.name === "ugm_session")
+        .map((c) => `${c.name}=${c.value}`)
+        .join("; ")
+    : undefined;
+  const data = await serverGet<{ items: ProductCard[]; total: number }>(`/store/products?${query}`, personal ? { revalidate: 0, cookie } : { revalidate: 20 });
   const sizes = [...new Set(data.items.flatMap((p) => p.sizes))].slice(0, 20);
   const pages = Math.ceil(data.total / 24);
 
   return (
     <div className="container-page py-5">
+      {page === 1 && <TrackBrowse categorySlug={fixed.category} query={sp.q} />}
       <div className="mb-4">
         <h1 className="text-2xl font-bold">{title}</h1>
         {subtitle && <p className="text-sm text-gray-600">{subtitle}</p>}
@@ -43,7 +57,7 @@ export async function Listing({ basePath, fixed, searchParams, title, subtitle }
       </div>
       <div className="-mx-4 mb-4 flex gap-2 overflow-x-auto px-4 pb-1 text-sm">
         {SORTS.map(([v, l]) => (
-          <Link key={v} href={`${basePath}${qs(sp, { sort: v, page: undefined })}`} className={cn("shrink-0 rounded-full border px-3 py-1.5", (sp.sort ?? "newest") === v ? "border-brand-700 bg-brand-700 text-white" : "border-gray-300 bg-white")}>
+          <Link key={v} href={`${basePath}${qs(sp, { sort: v, page: undefined })}`} className={cn("shrink-0 rounded-full border px-3 py-1.5", (sp.sort ?? "foryou") === v ? "border-brand-700 bg-brand-700 text-white" : "border-gray-300 bg-white")}>
             {l}
           </Link>
         ))}

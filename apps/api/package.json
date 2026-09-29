@@ -26,6 +26,7 @@
     "@ugmall/notifications": "workspace:*",
     "@ugmall/orders": "workspace:*",
     "@ugmall/payments": "workspace:*",
+    "@ugmall/recommendations": "workspace:*",
     "@ugmall/reporting": "workspace:*",
     "@ugmall/shared": "workspace:*",
     "@ugmall/storage": "workspace:*",

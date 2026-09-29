@@ -83,6 +83,13 @@ Allowed transitions live in `packages/shared/src/order-status.ts`; every change 
 To add Flutterwave or MTN/Airtel direct APIs: implement `PaymentProvider`
 in `packages/payments/src/<name>.ts` and register it in `registry.ts`.
 
+## "For You" recommendations (`packages/recommendations`)
+- **Signals**: product views, 15-second dwell, searches and category visits (browser beacon `POST /store/events`), plus add-to-cart, wishlist and purchases recorded server-side. Anonymous shoppers get a first-party `ugm_vid` cookie; their profile merges into the customer's on sign-in.
+- **Profile** (Redis, `rec:prof:*`): decayed affinities for categories, brands, price bands and keywords — a long-term score (half-life 14 days) and a session score (half-life 2 hours) — plus recently viewed, bought and "shown" (impression) lists.
+- **Crowd signals**: trending (`rec:trend:<day>`, last 4 days weighted) and item-to-item co-views/co-purchases (`rec:co:<product>`).
+- **Ranking**: candidates from favourite categories/brands, co-views, trending, new, deals, best sellers and a random exploration pool; scored on interest, similarity, trending, quality (Bayesian rating + sales), freshness and discount, blended by how much we know about the shopper. Items shown and ignored lose weight, items just viewed step aside, bought items drop out. Gumbel sampling reshuffles every visit, ~15% of slots explore new categories, and a diversity pass stops long runs of one category or brand.
+- **Endpoints**: `GET /store/feed` (infinite, cursor-paged), `GET /store/feed/home` (personal rows), `GET /store/products/:id/recommendations`, and `sort=foryou` on product listings (stable per shopper per hour so paging holds; the default sort).
+
 ## Storage
 ```
 /opt/shop/storage/

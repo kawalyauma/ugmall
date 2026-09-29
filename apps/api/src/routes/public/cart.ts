@@ -3,6 +3,7 @@ import { Hono, type Context } from "hono";
 import { z } from "zod";
 import { CartError, priceLines } from "@ugmall/orders";
 import { ApiError, body, COOKIES, readCookie, writeCookie } from "../../lib/http";
+import { learn } from "../../lib/shopper";
 import type { AppEnv } from "../../types";
 
 const CART_TTL = 60 * 60 * 24 * 30;
@@ -82,6 +83,8 @@ cartRoutes.post("/items", async (c) => {
   });
   await redis.multi().hset(key, input.variantId, qty).expire(key, CART_TTL).exec();
   const view = await cartView(c);
+  const productId = view.items.find((i) => i.variantId === input.variantId)?.productId;
+  if (productId) await learn(c, (s) => c.get("container").recommendations.record(s, [{ type: "cart", productId }]));
   return c.json({ ...view, notice: qty < wanted ? `Only ${available} available — we added what's left.` : undefined });
 });
 

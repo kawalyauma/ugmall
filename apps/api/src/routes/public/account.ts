@@ -8,6 +8,7 @@ import { listProducts } from "../../lib/catalog";
 import { readUpload, saveImage } from "../../lib/media";
 import { requireCustomer } from "../../middleware/auth";
 import { limit } from "../../middleware/security";
+import { learn } from "../../lib/shopper";
 import type { AppEnv } from "../../types";
 import { mapDomainError } from "./checkout";
 
@@ -137,6 +138,7 @@ accountRoutes.put("/wishlist/:productId", requireCustomer, async (c) => {
   const [p] = await db.select({ id: products.id }).from(products).where(eq(products.id, c.req.param("productId")));
   if (!p) throw new ApiError(404, "Product not found");
   await db.insert(wishlistItems).values({ customerId: c.get("customer")!.id, productId: p.id }).onConflictDoNothing();
+  await learn(c, (s) => c.get("container").recommendations.record(s, [{ type: "wishlist", productId: p.id }]));
   return c.json({ ok: true });
 });
 accountRoutes.delete("/wishlist/:productId", requireCustomer, async (c) => {

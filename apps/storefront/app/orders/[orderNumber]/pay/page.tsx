@@ -299,6 +299,11 @@ export default function PayPage({ params }: { params: Promise<{ orderNumber: str
                 </div>
               )}
 
+              {!showFallback && (momoUnavailable || momoFailed) && latest?.failureReason && (
+                <div className="flex items-start gap-2 rounded-2xl bg-amber-50 p-3 text-sm text-amber-900">
+                  <AlertTriangle className="mt-0.5 size-4 shrink-0" /> {latest.failureReason}
+                </div>
+              )}
               {momoWaiting && !changingNumber ? (
                 <MomoWaiting attempt={latest!} network={latest!.method as MomoMethod} onResend={() => startPayment(latest!.method, phone)} onChangeNumber={() => setChangingNumber(true)} busy={busy} />
               ) : (

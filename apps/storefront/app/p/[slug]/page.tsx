@@ -4,7 +4,7 @@ import Link from "next/link";
 import { looksLikeHtml, sanitizeHtml, htmlToText } from "@ugmall/shared";
 import { ApiError, serverGet } from "@/lib/api";
 import type { ProductDetail, ShopSettings } from "@/lib/types";
-import { ProductGrid } from "@/components/product-card";
+import { TrackProductView, YouMayAlsoLike } from "@/components/recs";
 import { ProductPurchase } from "./purchase";
 import { Reviews } from "./reviews";
 
@@ -64,6 +64,7 @@ export default async function ProductPage({ params }: Props) {
           </>
         )}
       </nav>
+      <TrackProductView productId={p.id} />
       <ProductPurchase product={p} whatsappNumber={settings.whatsappNumber} />
       {p.description && (
         <section className="mt-8 rounded-2xl border border-gray-200 bg-white p-5">
@@ -90,12 +91,7 @@ export default async function ProductPage({ params }: Props) {
         </section>
       )}
       <Reviews productId={p.id} rating={p.rating} />
-      {p.related.length > 0 && (
-        <section className="mt-8">
-          <h2 className="mb-3 text-lg font-bold">You may also like</h2>
-          <ProductGrid items={p.related} />
-        </section>
-      )}
+      <YouMayAlsoLike productId={p.id} fallback={p.related} />
     </div>
   );
 }

@@ -39,6 +39,7 @@ export const COOKIES = {
   staff: "ugm_staff",
   customer: "ugm_session",
   cart: "ugm_cart",
+  visitor: "ugm_vid",
 } as const;
 
 export function readCookie(c: Context, name: string) {

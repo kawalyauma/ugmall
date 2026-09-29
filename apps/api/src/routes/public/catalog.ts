@@ -5,6 +5,7 @@ import { childLocations, LEVEL_LABELS, resolveLocation, searchLocations } from "
 import { ApiError, pagination } from "../../lib/http";
 import { listProducts, productDetail } from "../../lib/catalog";
 import { getPublicSettings } from "../../lib/settings";
+import { shopperSubject } from "../../lib/shopper";
 import type { AppEnv } from "../../types";
 
 export const catalogRoutes = new Hono<AppEnv>();
@@ -73,7 +74,7 @@ catalogRoutes.get("/products", async (c) => {
     }
   }
   const num = (v?: string) => (v && /^\d+$/.test(v) ? Number(v) : undefined);
-  const result = await listProducts(db, {
+  const filters = {
     q: q.q,
     categoryIds,
     brandId,
@@ -85,9 +86,19 @@ catalogRoutes.get("/products", async (c) => {
     featured: q.featured === "1",
     onSale: q.sale === "1",
     sort: (["newest", "price_asc", "price_desc", "popular", "rating"] as const).find((s) => s === q.sort),
-    limit,
-    offset,
-  });
+  };
+  if (q.sort === "foryou") {
+    // Personal order for this shopper (anonymous shoppers get a crowd-driven
+    // order that rotates hourly). Stable within the hour so paging holds.
+    const all = await listProducts(db, { ...filters, sort: "popular", limit: 600, offset: 0 });
+    const subject = (await shopperSubject(c, false)) ?? "anon";
+    const order = await c.get("container").recommendations.orderListing(subject, all.items.map((p) => p.id));
+    const pos = new Map(order.map((id, i) => [id, i]));
+    const items = [...all.items].sort((a, b) => (pos.get(a.id) ?? 1e9) - (pos.get(b.id) ?? 1e9));
+    c.header("Cache-Control", "private, no-store");
+    return c.json({ items: items.slice(offset, offset + limit), total: Math.min(all.total, all.items.length), page, limit });
+  }
+  const result = await listProducts(db, { ...filters, limit, offset });
   return c.json({ ...result, page, limit });
 });
 

@@ -27,6 +27,11 @@ export interface ProductCard {
   inStock: boolean;
 }
 
+export interface RecommendedProduct extends ProductCard {
+  /** Why the For You engine picked it. */
+  reason: "for_you" | "similar" | "trending" | "new" | "deal" | "explore" | "popular";
+}
+
 export interface Variant {
   id: string;
   sku: string;

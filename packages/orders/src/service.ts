@@ -33,6 +33,7 @@ import {
   isPrepaid,
   normalizeUgPhone,
   ORDER_STATUS_LABELS,
+  PAYMENT_METHOD_LABELS,
   type CheckoutInput,
   type OrderSource,
   type OrderStatus,
@@ -407,7 +408,7 @@ export class OrderService {
       providerUnavailable = !invalid;
       const failureReason = invalid
         ? (err as Error).message
-        : `${provider.displayName} is not responding right now. You can try again or pay another way.`;
+        : `${PAYMENT_METHOD_LABELS[payment.method]} is not responding right now. You can try again or pay another way.`;
       result = { status: "pending", failureReason, raw: { error: (err as Error).message } };
     }
     await this.db.insert(paymentEvents).values({ paymentId: payment.id, provider: provider.id, kind: "initiate", payload: (result.raw ?? result) as object });

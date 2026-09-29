@@ -1,0 +1,18 @@
+{
+  "name": "@ugmall/recommendations",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@ugmall/database": "workspace:*",
+    "@ugmall/shared": "workspace:*",
+    "drizzle-orm": "^0.45.0",
+    "ioredis": "^5.8.0"
+  }
+}

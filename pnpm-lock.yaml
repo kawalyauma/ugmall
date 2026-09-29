@@ -96,6 +96,9 @@ importers:
       '@ugmall/payments':
         specifier: workspace:*
         version: link:../../packages/payments
+      '@ugmall/recommendations':
+        specifier: workspace:*
+        version: link:../../packages/recommendations
       '@ugmall/reporting':
         specifier: workspace:*
         version: link:../../packages/reporting
@@ -300,6 +303,21 @@ importers:
       '@ugmall/shared':
         specifier: workspace:*
         version: link:../shared
+
+  packages/recommendations:
+    dependencies:
+      '@ugmall/database':
+        specifier: workspace:*
+        version: link:../database
+      '@ugmall/shared':
+        specifier: workspace:*
+        version: link:../shared
+      drizzle-orm:
+        specifier: ^0.45.0
+        version: 0.45.3(postgres@3.4.9)
+      ioredis:
+        specifier: ^5.8.0
+        version: 5.11.1
 
   packages/reporting:
     dependencies:

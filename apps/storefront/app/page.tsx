@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { ArrowRight, Flame, MessageCircle, ShieldCheck, Shirt, Smartphone, Truck, Zap } from "lucide-react";
+import { ArrowRight, MessageCircle, ShieldCheck, Shirt, Smartphone, Truck, Zap } from "lucide-react";
 import { serverGet } from "@/lib/api";
 import type { ProductCard as Product, ShopSettings } from "@/lib/types";
 import { ProductCard, ProductGrid } from "@/components/product-card";
 import { Countdown } from "@/components/countdown";
 import { DealsCarousel, type DealSlide } from "@/components/deals-carousel";
+import { ForYouFeed, ForYouRows } from "@/components/recs";
 
 interface Offer {
   id: string;
@@ -101,11 +102,12 @@ function Campaign({ offers, items, total }: { offers: Offer[]; items: Product[];
 }
 
 export default async function Home() {
-  const [settings, fashion, trending, phoneAccessories, offers, onPromotion, deals] = await Promise.all([
+  // Curated rows use the "foryou" order without a shopper: a crowd-driven mix of
+  // trending, quality, new and discounted items that rotates every hour.
+  const [settings, fashion, phoneAccessories, offers, onPromotion, deals] = await Promise.all([
     serverGet<ShopSettings>("/store/settings"),
-    serverGet<{ items: Product[] }>("/store/products?category=fashion&sort=newest&limit=8"),
-    serverGet<{ items: Product[] }>("/store/products?sort=popular&limit=8"),
-    serverGet<{ items: Product[] }>("/store/products?categories=chargers-adapters,cables,cases,earphones-headsets,screen-protectors&sort=popular&limit=8"),
+    serverGet<{ items: Product[] }>("/store/products?category=fashion&sort=foryou&limit=8"),
+    serverGet<{ items: Product[] }>("/store/products?categories=chargers-adapters,cables,cases,earphones-headsets,screen-protectors&sort=foryou&limit=8"),
     serverGet<Offer[]>("/store/offers").catch(() => []),
     serverGet<{ items: Product[]; total: number }>("/store/products?sale=1&sort=popular&limit=12").catch(() => ({ items: [], total: 0 })),
     serverGet<DealSlide[]>("/store/deals").catch(() => []),
@@ -122,7 +124,7 @@ export default async function Home() {
 
       <section className="container-page mt-6 grid grid-cols-2 gap-2 md:grid-cols-4">
         {[
-          { icon: Smartphone, t: "Mobile Money", d: "MTN & Airtel" },
+          { icon: Smartphone, t: "Mobile Money & cards", d: "MTN, Airtel, Visa, Mastercard" },
           { icon: Truck, t: "48-hour delivery", d: "Across our service areas" },
           { icon: ShieldCheck, t: "Cash on Delivery", d: "Pay when it arrives" },
           { icon: MessageCircle, t: "WhatsApp support", d: settings.supportPhone },
@@ -137,9 +139,12 @@ export default async function Home() {
         ))}
       </section>
 
+      <ForYouRows />
+
       <ProductSection icon={Shirt} eyebrow="Style edit" title="Fashion" description="Fresh fashion picks from across the catalogue." href="/c/fashion" items={fashion.items} accent="bg-rose-100 text-rose-800" />
-      <ProductSection icon={Flame} eyebrow="Popular now" title="Trending items" description="The products shoppers are viewing and buying most." href="/search?sort=popular" items={trending.items} accent="bg-amber-100 text-amber-800" />
       <ProductSection icon={Smartphone} eyebrow="Everyday tech" title="Phone accessories" description="Chargers, cables, cases, audio and device protection." href="/categories" items={phoneAccessories.items} accent="bg-sky-100 text-sky-800" />
+
+      <ForYouFeed />
     </>
   );
 }

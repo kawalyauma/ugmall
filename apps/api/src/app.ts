@@ -13,6 +13,7 @@ import { catalogRoutes } from "./routes/public/catalog";
 import { cartRoutes } from "./routes/public/cart";
 import { checkoutRoutes, trackingRoutes } from "./routes/public/checkout";
 import { accountRoutes } from "./routes/public/account";
+import { recommendationRoutes } from "./routes/public/recommendations";
 import { webhookRoutes } from "./routes/webhooks";
 import { fileRoutes } from "./routes/files";
 import { riderRoutes } from "./routes/rider";
@@ -81,6 +82,7 @@ export function createApp(container: Container) {
   // Storefront API
   app.use("/store/*", loadCustomer);
   app.route("/store", catalogRoutes);
+  app.route("/store", recommendationRoutes);
   app.route("/store/cart", cartRoutes);
   app.route("/store/checkout", checkoutRoutes);
   app.route("/store/orders", trackingRoutes);

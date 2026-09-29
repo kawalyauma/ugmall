@@ -3,6 +3,7 @@ import { OtpService, SessionStore } from "@ugmall/auth";
 import { StockReservations, dbAvailability } from "@ugmall/inventory";
 import { OrderService } from "@ugmall/orders";
 import { createPaymentRegistryFromEnv, type PaymentRegistry } from "@ugmall/payments";
+import { RecommendationService } from "@ugmall/recommendations";
 import { createStorageFromEnv, type StorageProvider } from "@ugmall/storage";
 import type { Redis } from "ioredis";
 import { loadEnv, type Env } from "./env";
@@ -22,6 +23,7 @@ export interface Container {
   otp: OtpService;
   queues: Queues;
   orders: OrderService;
+  recommendations: RecommendationService;
 }
 
 export function createContainer(env: Env = loadEnv()): Container {
@@ -50,5 +52,6 @@ export function createContainer(env: Env = loadEnv()): Container {
     otp: new OtpService(redis),
     queues,
     orders,
+    recommendations: new RecommendationService(db, redis),
   };
 }
