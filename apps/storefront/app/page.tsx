@@ -48,7 +48,6 @@ function ProductSection({ icon: Icon, eyebrow, title, description, href, items, 
 function Campaign({ offers, items, total }: { offers: Offer[]; items: Product[]; total: number }) {
   if (!items.length) return null;
   const lead = offers[0];
-  const bestDiscount = Math.max(...items.map((p) => p.discountPercent));
   return (
     <section className="container-page mt-4">
       <div className="overflow-hidden rounded-2xl bg-gradient-to-br from-orange-500 via-accent to-amber-400 shadow-sm">
@@ -60,8 +59,7 @@ function Campaign({ offers, items, total }: { offers: Offer[]; items: Product[];
             </div>
             <h2 className="mt-1 truncate text-2xl font-black tracking-tight md:text-3xl">{lead?.title ?? "Hot deals"}</h2>
             <p className="text-sm font-medium text-white/90">
-              {lead?.description ?? `${total} products on promotion`}
-              {bestDiscount > 0 && <> · up to <b>-{Math.max(bestDiscount, lead?.percentOff ?? 0)}%</b></>}
+              {lead?.description ?? `${total} products on promotion · prices shown below`}
             </p>
           </div>
           <div className="relative flex items-center justify-between gap-3 md:justify-end">
@@ -129,16 +127,11 @@ export default async function Home() {
           { icon: Smartphone, t: "Mobile Money", d: "MTN & Airtel" },
           { icon: Truck, t: "48-hour delivery", d: "Across our service areas" },
           { icon: ShieldCheck, t: "Cash on Delivery", d: "Pay when it arrives" },
-          { icon: MessageCircle, t: "WhatsApp support", d: settings.supportPhone },
-        ].map((f) => (
-          <div key={f.t} className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
-            <f.icon className="size-6 shrink-0 text-brand-700" />
-            <div>
-              <div className="text-sm font-semibold">{f.t}</div>
-              <div className="text-xs text-gray-500">{f.d}</div>
-            </div>
-          </div>
-        ))}
+          { icon: MessageCircle, t: "WhatsApp support", d: settings.supportPhone, href: settings.whatsappNumber ? whatsappLink(settings.whatsappNumber, "Hi UG Mall, I need help shopping.") : undefined },
+        ].map((f) => {
+          const body = <><f.icon className="size-6 shrink-0 text-brand-700" /><div><div className="text-sm font-semibold">{f.t}</div><div className="text-xs text-gray-500">{f.d}</div></div></>;
+          return f.href ? <a key={f.t} href={f.href} target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-white p-3 shadow-sm hover:border-brand-200">{body}</a> : <div key={f.t} className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">{body}</div>;
+        })}
       </section>
 
       {categories.filter((c) => !c.parentId).length > 0 && <section className="container-page mt-8"><div className="mb-3 flex items-end justify-between"><div><div className="text-xs font-bold uppercase tracking-[0.16em] text-brand-700">Browse faster</div><h2 className="mt-1 text-2xl font-black tracking-tight">Shop by category</h2></div><Link href="/categories" className="text-sm font-bold text-brand-700">All categories →</Link></div><div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2 md:mx-0 md:grid md:grid-cols-6 md:px-0">{categories.filter((c) => !c.parentId).slice(0, 12).map((c) => <Link key={c.id} href={`/c/${c.slug}`} className="w-28 shrink-0 rounded-2xl border border-gray-200 bg-white p-3 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md md:w-auto"><div className="mx-auto mb-2 grid aspect-square w-full place-items-center overflow-hidden rounded-xl bg-gray-50">{c.image ? <img src={c.image} alt="" className="size-full object-contain p-1" /> : <Shirt className="size-7 text-brand-700" />}</div><div className="line-clamp-2 text-xs font-bold">{c.name}</div></Link>)}</div></section>}

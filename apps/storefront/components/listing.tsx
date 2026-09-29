@@ -34,6 +34,7 @@ function FilterPanel({ basePath, sp, brands, sizes, colours }: { basePath: strin
         <Hidden name="q" value={sp.q} />
         <Hidden name="size" value={sp.size} />
         <Hidden name="colour" value={sp.colour} />
+        <Hidden name="featured" value={sp.featured} />
         <div>
           <label htmlFor="sort" className="mb-1 block text-xs font-bold uppercase tracking-wide text-gray-500">Sort</label>
           <select id="sort" name="sort" defaultValue={sp.sort ?? "newest"} className="h-10 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm">
@@ -67,7 +68,7 @@ function FilterPanel({ basePath, sp, brands, sizes, colours }: { basePath: strin
 
 export async function Listing({ basePath, fixed, searchParams, title, subtitle }: { basePath: string; fixed: Record<string, string>; searchParams: SearchParams; title: string; subtitle?: string }) {
   const sp: Record<string, string | undefined> = {};
-  for (const k of ["sort", "size", "colour", "min", "max", "page", "q", "sale", "brand", "stock"]) {
+  for (const k of ["sort", "size", "colour", "min", "max", "page", "q", "sale", "brand", "stock", "featured"]) {
     const v = searchParams[k];
     sp[k] = Array.isArray(v) ? v[0] : v;
   }

@@ -4,7 +4,7 @@ A production-grade, mobile-first online shop built as a **modular monolith** and
 designed to run entirely on **your own server**: database, cache, queues, product
 images, invoices and receipts all live on your machine. No cloud object storage.
 
-- **Storefront** (Next.js): categories, search, product variants (sizes/colours), cart, wishlist, reviews, offers, guest checkout, order tracking, **Order on WhatsApp**
+- **Storefront** (Next.js): categories, search, product variants (sizes/colours), cart, wishlist, reviews, offers, guest checkout, order tracking, **Order on WhatsApp**, analytics hooks, SEO sitemap/robots and Google/Meta product feeds
 - **Payments**: **Ssentezo Wallet** (MTN Mobile Money + Airtel Money) and Cash on Delivery — behind a `PaymentProvider` interface. **Cash on Delivery is only allowed for orders up to UGX 150,000** (total incl. delivery; change in Admin → Settings, 0 = no limit), enforced by the server for web and staff-entered orders. There are **no pickup stations**: every order is delivered
 - **Admin** (Next.js): dashboard, products, variants, photos, categories, brands, inventory with audit trail, orders, payments, refunds, deliveries, riders & COD cash, returns, customers, reviews, suppliers & purchases, promotions & coupons, reports (PDF / Excel / CSV / print), expenses, staff, roles & permissions, settings
 - **Rider app** (in the admin, mobile): assigned deliveries, call / WhatsApp / navigate, cash to collect, delivery confirmation
@@ -185,3 +185,10 @@ your server; the application code does not change (`StorageProvider` abstraction
 
 ## License
 Private — all rights reserved.
+
+
+## Product feeds and analytics
+
+- Google Merchant Center scheduled feed: `https://<SHOP_DOMAIN>/api/store/feeds/google.xml`
+- Meta Commerce Manager catalogue feed: `https://<SHOP_DOMAIN>/api/store/feeds/meta.csv`
+- Set `NEXT_PUBLIC_GA_MEASUREMENT_ID` and/or `NEXT_PUBLIC_META_PIXEL_ID` in `.env`, then rebuild the storefront with `./scripts/deploy.sh`.

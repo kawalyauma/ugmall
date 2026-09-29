@@ -274,7 +274,8 @@ catalogRoutes.get("/locations/:id", async (c) => {
 });
 
 
-const xmlEscape = (v: unknown) => String(v ?? "").replace(/[<>&"']/g, (ch) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&apos;" })[ch]!);
+const XML_ENTITIES: Record<string, string> = { "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&apos;" };
+const xmlEscape = (v: unknown) => String(v ?? "").replace(/[<>&"']/g, (ch) => XML_ENTITIES[ch] ?? ch);
 const csvCell = (v: unknown) => { const s = String(v ?? ""); return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
 
 catalogRoutes.get("/feeds/google.xml", async (c) => {
