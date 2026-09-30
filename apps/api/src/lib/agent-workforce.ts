@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
+import { request } from "node:http";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import sharp from "sharp";
 import { z } from "zod";
@@ -128,6 +129,26 @@ ${JSON.stringify(context)}`;
 
 /** Runs Codex with a minimal environment, no application credentials and a read-only sandbox. */
 export async function runCodexAgent(agentKey: AgentKey, objective: string | null, context: unknown): Promise<AgentProposal> {
+  const prompt = promptFor(agentKey, objective, context);
+  if (process.env.CODEX_RUNNER_SOCKET) {
+    const result = await new Promise<unknown>((resolve, reject) => {
+      const req = request({ socketPath: process.env.CODEX_RUNNER_SOCKET, path: "/run", method: "POST", headers: { "content-type": "application/json" }, timeout: 270_000 }, (res) => {
+        let raw = "";
+        res.setEncoding("utf8");
+        res.on("data", (chunk) => { raw += chunk; });
+        res.on("end", () => {
+          try {
+            const parsed = JSON.parse(raw) as { result?: unknown; error?: string };
+            res.statusCode === 200 ? resolve(parsed.result) : reject(new Error(parsed.error || `Codex runner returned ${res.statusCode}`));
+          } catch { reject(new Error("Codex runner returned an invalid response")); }
+        });
+      });
+      req.on("timeout", () => req.destroy(new Error("Codex runner timed out")));
+      req.on("error", reject);
+      req.end(JSON.stringify({ prompt, schema: outputSchema }));
+    });
+    return proposal.parse(result);
+  }
   const dir = await mkdtemp(join(tmpdir(), "ugmall-codex-"));
   const schemaPath = join(dir, "schema.json");
   const outputPath = join(dir, "result.json");
@@ -153,7 +174,7 @@ export async function runCodexAgent(agentKey: AgentKey, objective: string | null
       const timer = setTimeout(() => { child.kill("SIGKILL"); reject(new Error("Codex worker timed out")); }, 4 * 60_000);
       child.on("error", (err) => { clearTimeout(timer); reject(err); });
       child.on("close", (code) => { clearTimeout(timer); code === 0 ? resolve() : reject(new Error(`Codex exited ${code}: ${stderr}`)); });
-      child.stdin.end(promptFor(agentKey, objective, context));
+      child.stdin.end(prompt);
     });
     const raw = await readFile(outputPath, "utf8");
     return proposal.parse(JSON.parse(raw));

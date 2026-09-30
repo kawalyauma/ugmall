@@ -45,12 +45,13 @@ The durable records are `agent_runs`, `agent_actions`, and the general `audit_lo
 
 ## Runtime and deployment
 
-The background worker container mounts the host's Codex installation and login:
+Codex runs in a small host-side service. The background worker can reach it
+only through a Unix socket; the runner has no database or payment credentials.
 
-- `CODEX_INSTALL_ROOT` defaults to `/usr/lib/node_modules/@openai/codex`.
-- `CODEX_HOME_HOST` defaults to `/home/ubuntu/.codex`.
-- The login directory is writable so Codex can refresh authentication and
-  ephemeral session metadata; Codex commands still run with `--sandbox read-only`.
+- Host service definition: `deploy/ugmall-codex-runner.service`.
+- Socket: `/opt/shop/agent-runtime/codex.sock` on the host and
+  `/agent-runtime/codex.sock` in the worker container.
+- Codex commands run with `--ephemeral --sandbox read-only`.
 - Agent queue concurrency is one to keep server load and business changes predictable.
 
 Before deployment, verify the host login with `codex login status`. The expected result is `Logged in using ChatGPT`.

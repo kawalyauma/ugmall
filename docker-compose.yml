@@ -69,16 +69,11 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-shop}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-shop}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       STORAGE_ROOT: /storage
-      CODEX_CLI_PATH: /opt/codex/bin/codex.js
-      CODEX_HOME: /home/node/.codex
-      CODEX_HOME_DIR: /home/node
+      CODEX_RUNNER_SOCKET: /agent-runtime/codex.sock
     volumes:
       - ${SHOP_ROOT:-/opt/shop}/storage:/storage
-      # Codex uses the server's ChatGPT login; no separate AI API key.
-      - ${CODEX_INSTALL_ROOT:-/usr/lib/node_modules/@openai/codex}:/opt/codex:ro
-      # Codex refreshes authentication/session metadata here; its execution
-      # sandbox remains read-only and receives no application credentials.
-      - ${CODEX_HOME_HOST:-/home/ubuntu/.codex}:/home/node/.codex
+      # The host runner owns the ChatGPT login; the app only sees this socket.
+      - ${SHOP_ROOT:-/opt/shop}/agent-runtime:/agent-runtime
     healthcheck: { disable: true }
     depends_on:
       api: { condition: service_healthy }
