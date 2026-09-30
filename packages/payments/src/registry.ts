@@ -53,7 +53,7 @@ export function createPaymentRegistryFromEnv(env: NodeJS.ProcessEnv = process.en
   registry.register(new PayOnPickupProvider(), []);
 
   const mobile = (env.PAYMENT_MOBILE_MONEY_PROVIDER ?? "ssentezo").toLowerCase();
-  if (mobile === "ssentezo") {
+  if (mobile !== "fake") {
     if (env.SSENTEZO_USERNAME && env.SSENTEZO_PASSWORD) {
       registry.register(
         new SsentezoWalletProvider({
@@ -68,27 +68,21 @@ export function createPaymentRegistryFromEnv(env: NodeJS.ProcessEnv = process.en
       console.warn("[payments] SSENTEZO_USERNAME/PASSWORD not set — mobile money is disabled");
     }
   }
-  if (mobile === "pesapal") {
-    if (env.PESAPAL_CONSUMER_KEY && env.PESAPAL_CONSUMER_SECRET && env.PESAPAL_IPN_ID) {
-      const pesapal = new PesaPalProvider({
-        consumerKey: env.PESAPAL_CONSUMER_KEY,
-        consumerSecret: env.PESAPAL_CONSUMER_SECRET,
-        notificationId: env.PESAPAL_IPN_ID,
-        environment: env.PESAPAL_ENV === "live" ? "live" : "sandbox",
-        baseUrl: env.PESAPAL_BASE_URL || undefined,
-      });
-      // PesaPal presents Mobile Money and card choices together on its hosted
-      // checkout, so expose one clear customer-facing option instead of three.
-      registry.register(pesapal, ["card"]);
-    } else if (env.NODE_ENV === "production") {
-      console.warn("[payments] PESAPAL_CONSUMER_KEY/SECRET/IPN_ID not set — online payment is disabled");
-    }
+  if (env.PESAPAL_CONSUMER_KEY && env.PESAPAL_CONSUMER_SECRET && env.PESAPAL_IPN_ID) {
+    const pesapal = new PesaPalProvider({
+      consumerKey: env.PESAPAL_CONSUMER_KEY,
+      consumerSecret: env.PESAPAL_CONSUMER_SECRET,
+      notificationId: env.PESAPAL_IPN_ID,
+      environment: env.PESAPAL_ENV === "live" ? "live" : "sandbox",
+      baseUrl: env.PESAPAL_BASE_URL || undefined,
+    });
+    registry.register(pesapal, ["card"]);
+  } else if (env.NODE_ENV === "production") {
+    console.warn("[payments] PESAPAL_CONSUMER_KEY/SECRET/IPN_ID not set — card payments are disabled");
   }
   if (mobile === "fake" || (env.PAYMENTS_FAKE === "true" && !registry.enabledMethods().includes("mtn_momo"))) {
     if (env.NODE_ENV === "production") throw new PaymentError("The fake payment provider cannot run in production", "CONFIG");
     registry.register(new FakeMobileMoneyProvider(Number(env.PAYMENTS_FAKE_DELAY_MS ?? 3000)), ["mtn_momo", "airtel_money"]);
   }
-  // Card: Ssentezo's public API covers mobile money; plug a card-capable
-  // provider (Flutterwave/Pesapal) in here when one is contracted.
   return registry;
 }

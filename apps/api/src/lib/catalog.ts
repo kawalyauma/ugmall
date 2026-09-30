@@ -54,6 +54,7 @@ export async function imagesFor(db: Database, productIds: string[]): Promise<Map
 export interface ListFilters {
   q?: string;
   categoryIds?: string[];
+  categorySlugs?: string[];
   brandId?: string;
   minPrice?: number;
   maxPrice?: number;
@@ -93,6 +94,20 @@ export async function listProducts(db: Database, f: ListFilters) {
     );
   }
   if (f.categoryIds?.length) where.push(inArray(products.categoryId, f.categoryIds));
+  if (f.categorySlugs?.length) {
+    const slugs = [...new Set(f.categorySlugs.map((slug) => slug.trim()).filter(Boolean))].slice(0, 50);
+    if (slugs.length) {
+      const slugList = sql.join(slugs.map((slug) => sql`${slug}`), sql`, `);
+      where.push(sql`${products.categoryId} in (
+        with recursive category_tree(id) as (
+          select ${categories.id} from ${categories} where ${categories.slug} in (${slugList}) and ${categories.isActive} = true
+          union
+          select child.id from ${categories} child join category_tree parent on child.parent_id = parent.id where child.is_active = true
+        )
+        select id from category_tree
+      )`);
+    }
+  }
   if (f.brandId) where.push(eq(products.brandId, f.brandId));
   if (f.productIds) where.push(f.productIds.length ? inArray(products.id, f.productIds) : sql`false`);
   if (f.minPrice !== undefined) where.push(sql`${priceExpr} >= ${f.minPrice}`);

@@ -49,6 +49,7 @@ describe("PesaPalProvider", () => {
       callback_url: "https://shop.test/orders/ORD-2026-000001?t=secret",
       billing_address: { phone_number: "0772123456", country_code: "UG", first_name: "John", last_name: "Mukasa" },
     });
+    expect(submit.body).not.toHaveProperty("redirect_mode");
   });
 
   it("maps and verifies a completed transaction", async () => {

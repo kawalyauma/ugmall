@@ -107,7 +107,6 @@ export class PesaPalProvider implements PaymentProvider {
         description: req.description.slice(0, 100),
         callback_url: req.returnUrl,
         cancellation_url: req.returnUrl,
-        redirect_mode: "TOP_WINDOW",
         notification_id: this.opts.notificationId,
         branch: "UG Mall",
         billing_address: {
@@ -126,7 +125,7 @@ export class PesaPalProvider implements PaymentProvider {
       status: "pending",
       providerReference,
       redirectUrl,
-      customerMessage: "Continue to PesaPal to pay securely with Mobile Money or card.",
+      customerMessage: "Complete your card payment securely with PesaPal.",
       raw: json,
     };
   }

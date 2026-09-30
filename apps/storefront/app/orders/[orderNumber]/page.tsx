@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { trackCommerceEvent } from "@/components/analytics";
+import { PesaPalFrame } from "@/components/pesapal-frame";
 
 interface Tracked {
   orderNumber: string;
@@ -51,6 +52,7 @@ export default function OrderPage({ params }: { params: Promise<{ orderNumber: s
   const [error, setError] = useState<string | null>(null);
   const [retryPhone, setRetryPhone] = useState("");
   const [busy, setBusy] = useState(false);
+  const [cardPaymentUrl, setCardPaymentUrl] = useState<string | null>(null);
 
   const purchaseEventSent = useState(false);
   const purchaseSent = purchaseEventSent[0];
@@ -105,7 +107,7 @@ export default function OrderPage({ params }: { params: Promise<{ orderNumber: s
     try {
       const r = await api<{ message?: string; redirectUrl?: string }>(`/store/orders/${orderNumber}/retry-payment`, { body: { t, msisdn: retryPhone || undefined } });
       if (r.redirectUrl) {
-        window.location.assign(r.redirectUrl);
+        setCardPaymentUrl(r.redirectUrl);
         return;
       }
       toast(r.message ?? "Payment started");
@@ -139,6 +141,8 @@ export default function OrderPage({ params }: { params: Promise<{ orderNumber: s
   const help = whatsappLink(settings.whatsappNumber, `Hello, I need help with order ${order.orderNumber}`);
 
   return (
+    <>
+    {cardPaymentUrl && <PesaPalFrame src={cardPaymentUrl} onClose={() => setCardPaymentUrl(null)} onReturn={() => { setCardPaymentUrl(null); void load(); }} />}
     <div className="container-page max-w-2xl space-y-4 py-5">
       {isNew && order.status !== "awaiting_payment" && !cancelled && (
         <div className="rounded-2xl bg-green-50 p-4 text-green-800">
@@ -155,7 +159,7 @@ export default function OrderPage({ params }: { params: Promise<{ orderNumber: s
           {order.latestPayment?.status === "failed" ? (
             <p className="text-sm text-red-700">Payment failed{order.latestPayment.failureReason ? `: ${order.latestPayment.failureReason}` : ""}. Try again below.</p>
           ) : isPesaPal ? (
-            <p className="text-sm">Pay <b>{formatUGX(order.total - order.amountPaid)}</b> securely through PesaPal using Mobile Money or a bank card. This page updates automatically after payment.</p>
+            <p className="text-sm">Pay <b>{formatUGX(order.total - order.amountPaid)}</b> securely by card through PesaPal. This page updates automatically after payment.</p>
           ) : (
             <p className="text-sm">
               We sent {order.paymentMethod === "mtn_momo" ? "an" : "a"} {PAYMENT_METHOD_LABELS[order.paymentMethod]} prompt for <b>{formatUGX(order.total - order.amountPaid)}</b> to <b>{order.latestPayment?.msisdn ?? order.phone}</b>. Enter your PIN to
@@ -163,7 +167,7 @@ export default function OrderPage({ params }: { params: Promise<{ orderNumber: s
             </p>
           )}
           {isPesaPal ? (
-            <Button onClick={retry} loading={busy} className="w-full">Continue to PesaPal</Button>
+            <Button onClick={retry} loading={busy} className="w-full">Open secure card payment</Button>
           ) : (
             <>
               <p className="text-xs text-gray-600">No prompt? Dial *165# (MTN) or *185# (Airtel) → check pending approvals, or resend below.</p>
@@ -306,5 +310,6 @@ export default function OrderPage({ params }: { params: Promise<{ orderNumber: s
         Continue shopping →
       </Link>
     </div>
+    </>
   );
 }

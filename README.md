@@ -88,8 +88,10 @@ pnpm typecheck
 
 In development WhatsApp messages are printed by the worker, OTP codes are returned
 by the API, and the fake Mobile Money provider approves payments after a few seconds.
-To try the PesaPal sandbox, set `PAYMENT_MOBILE_MONEY_PROVIDER=pesapal`,
-`PESAPAL_ENV=sandbox`, your sandbox credentials and the registered `PESAPAL_IPN_ID`.
+Mobile Money uses Ssentezo. Set `PAYMENT_MOBILE_MONEY_PROVIDER=ssentezo`, the
+`SSENTEZO_USERNAME` / `SSENTEZO_PASSWORD`, and `SSENTEZO_ENV`. Card payments use
+PesaPal independently; set `PESAPAL_ENV=sandbox`, the sandbox credentials and the
+registered `PESAPAL_IPN_ID`.
 
 After changing `packages/database/src/schema.ts`, generate a migration with
 `pnpm db:generate` and commit the SQL in `packages/database/migrations`.
@@ -143,9 +145,9 @@ Add more staff and riders in **Admin → Staff & roles**.
 ### 4. PesaPal
 1. Create PesaPal API 3.0 credentials (sandbox first, then live).
 2. Register `https://<SHOP_DOMAIN>/api/webhooks/payments/pesapal` as a POST IPN URL and copy its IPN ID.
-3. Set `PAYMENT_MOBILE_MONEY_PROVIDER=pesapal`, `PESAPAL_CONSUMER_KEY`,
-   `PESAPAL_CONSUMER_SECRET`, `PESAPAL_IPN_ID`, and `PESAPAL_ENV=live` in `.env`, then redeploy.
-4. Customers are redirected to PesaPal to choose Mobile Money or card. IPNs and the worker both
+3. Set `PESAPAL_CONSUMER_KEY`, `PESAPAL_CONSUMER_SECRET`, `PESAPAL_IPN_ID`, and
+   `PESAPAL_ENV=live` in `.env`, then redeploy.
+4. Card customers complete PesaPal inside an iframe on UG Mall. IPNs and the worker both
    verify the authoritative transaction status before an order is marked paid.
 
 ### 5. WhatsApp Business

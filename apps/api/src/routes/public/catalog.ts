@@ -69,16 +69,6 @@ catalogRoutes.get("/products", async (c) => {
   const q = c.req.query();
   let categoryIds: string[] | undefined;
   const requestedCategorySlugs = [q.category, ...(q.categories?.split(",") ?? [])].filter((slug): slug is string => Boolean(slug));
-  if (requestedCategorySlugs.length) {
-    const all = await db.select({ id: categories.id, parentId: categories.parentId, slug: categories.slug }).from(categories);
-    const roots = all.filter((x) => requestedCategorySlugs.includes(x.slug));
-    if (!roots.length) return c.json({ items: [], total: 0, page, limit });
-    // Include descendants of every requested category, without duplicates.
-    categoryIds = [...new Set(roots.map((x) => x.id))];
-    for (let i = 0; i < categoryIds.length; i++) {
-      for (const x of all) if (x.parentId === categoryIds[i] && !categoryIds.includes(x.id)) categoryIds.push(x.id);
-    }
-  }
   let brandId: string | undefined;
   if (q.brand) brandId = (await db.select({ id: brands.id }).from(brands).where(eq(brands.slug, q.brand)))[0]?.id ?? "00000000-0000-0000-0000-000000000000";
   let productIds: string[] | undefined;
@@ -98,6 +88,7 @@ catalogRoutes.get("/products", async (c) => {
   const result = await listProducts(db, {
     q: q.q,
     categoryIds,
+    categorySlugs: requestedCategorySlugs,
     brandId,
     productIds,
     minPrice: num(q.min),

@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { trackCommerceEvent } from "@/components/analytics";
+import { PesaPalFrame } from "@/components/pesapal-frame";
 
 interface Quote {
   subtotal: number;
@@ -46,6 +47,7 @@ export default function CheckoutPage() {
   const [quote, setQuote] = useState<Quote | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const [cardPayment, setCardPayment] = useState<{ url: string; orderUrl: string } | null>(null);
   const [f, setF] = useState({
     customerName: "",
     phone: "",
@@ -180,7 +182,7 @@ export default function CheckoutPage() {
       });
       await refreshCart();
       if (r.paymentRedirectUrl) {
-        window.location.assign(r.paymentRedirectUrl);
+        setCardPayment({ url: r.paymentRedirectUrl, orderUrl: `/orders/${r.orderNumber}?t=${encodeURIComponent(r.trackingToken)}&new=1` });
         return;
       }
       router.push(`/orders/${r.orderNumber}?t=${r.trackingToken}&new=1`);
@@ -204,6 +206,8 @@ export default function CheckoutPage() {
   }
 
   return (
+    <>
+    {cardPayment && <PesaPalFrame src={cardPayment.url} onClose={() => router.push(cardPayment.orderUrl)} onReturn={() => router.push(cardPayment.orderUrl)} />}
     <div className="container-page grid gap-6 py-5 md:grid-cols-[1fr_360px]">
       <div className="space-y-5">
         <h1 className="text-2xl font-bold">Checkout</h1>
@@ -297,7 +301,7 @@ export default function CheckoutPage() {
               <label key={m} className={cn("flex items-center gap-3 rounded-xl border p-3", disabled ? "cursor-not-allowed border-gray-200 bg-gray-50 text-gray-400" : "cursor-pointer", f.paymentMethod === m ? "border-brand-700 bg-brand-50" : !disabled && "border-gray-300")}>
                 <input type="radio" name="pm" disabled={disabled} checked={f.paymentMethod === m} onChange={() => set("paymentMethod", m)} className="accent-brand-700" />
                 <span className="font-medium">
-                  {m === "card" ? "PesaPal — Mobile Money or Card" : PAYMENT_METHOD_LABELS[m]}
+                  {m === "card" ? "Card payment" : PAYMENT_METHOD_LABELS[m]}
                   {m === "cash_on_delivery" && codLimit > 0 && (
                     <span className={cn("block text-xs font-normal", disabled ? "text-amber-700" : "text-gray-500")}>
                       {disabled ? `Not available for orders above ${formatUGX(codLimit)} — pay with Mobile Money` : `For orders up to ${formatUGX(codLimit)}`}
@@ -366,10 +370,11 @@ export default function CheckoutPage() {
           </div>
         </dl>
         <Button size="lg" className="w-full" onClick={placeOrder} loading={busy} disabled={!!holdError}>
-          <Lock className="size-4" /> {isMomo ? "Pay with Mobile Money" : "Place order"}
+          <Lock className="size-4" /> {isMomo ? "Pay with Mobile Money" : f.paymentMethod === "card" ? "Pay securely by card" : "Place order"}
         </Button>
         <p className="text-center text-xs text-gray-500">No account needed. We'll send updates on WhatsApp.</p>
       </aside>
     </div>
+    </>
   );
 }

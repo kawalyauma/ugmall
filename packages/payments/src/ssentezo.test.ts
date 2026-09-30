@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { SsentezoWalletProvider, mapSsentezoStatus } from "./ssentezo";
-import { PaymentRegistry } from "./registry";
+import { createPaymentRegistryFromEnv, PaymentRegistry } from "./registry";
 import { CashOnDeliveryProvider } from "./offline";
 
 function mockFetch(responses: Record<string, unknown>) {
@@ -100,5 +100,21 @@ describe("PaymentRegistry", () => {
     const r = new PaymentRegistry().register(new CashOnDeliveryProvider());
     expect(r.forMethod("cash_on_delivery").id).toBe("cash_on_delivery");
     expect(() => r.forMethod("card")).toThrow(/not enabled/);
+  });
+
+  it("uses Ssentezo for Mobile Money and PesaPal for cards at the same time", () => {
+    const r = createPaymentRegistryFromEnv({
+      NODE_ENV: "production",
+      PAYMENT_MOBILE_MONEY_PROVIDER: "ssentezo",
+      PAYMENT_CALLBACK_SECRET: "a-very-long-callback-secret",
+      SSENTEZO_USERNAME: "wallet-user",
+      SSENTEZO_PASSWORD: "wallet-password",
+      PESAPAL_CONSUMER_KEY: "card-key",
+      PESAPAL_CONSUMER_SECRET: "card-secret",
+      PESAPAL_IPN_ID: "card-ipn",
+    });
+    expect(r.forMethod("mtn_momo").id).toBe("ssentezo");
+    expect(r.forMethod("airtel_money").id).toBe("ssentezo");
+    expect(r.forMethod("card").id).toBe("pesapal");
   });
 });
