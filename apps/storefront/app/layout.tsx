@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Outfit, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { serverGet } from "@/lib/api";
 import type { Category, ShopSettings } from "@/lib/types";
@@ -6,6 +7,9 @@ import { StoreProvider } from "@/components/providers";
 import { BottomNav, Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { Analytics } from "@/components/analytics";
+
+const body = Plus_Jakarta_Sans({ subsets: ["latin"], display: "swap", variable: "--font-body" });
+const heading = Outfit({ subsets: ["latin"], display: "swap", variable: "--font-heading" });
 
 export async function generateMetadata(): Promise<Metadata> {
   const s = await serverGet<ShopSettings>("/store/settings", { revalidate: 60 }).catch(() => null);
@@ -31,7 +35,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     serverGet<Category[]>("/store/categories", { revalidate: 60 }).catch(() => []),
   ]);
   return (
-    <html lang="en-UG">
+    <html lang="en-UG" className={`${body.variable} ${heading.variable}`}>
       <body>
         <StoreProvider settings={settings}>
           <Header categories={categories} />

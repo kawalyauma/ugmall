@@ -9,7 +9,7 @@ import {
   products,
   type Database,
 } from "@ugmall/database";
-import { activePromotions, effectivePrice, type ActivePromotion } from "@ugmall/orders";
+import { activePromotions, effectivePrice, isSaleActive, type ActivePromotion } from "@ugmall/orders";
 import { htmlToText } from "@ugmall/shared";
 import type { StockReservations } from "@ugmall/inventory";
 
@@ -67,6 +67,14 @@ export interface ListFilters {
   limit: number;
   offset: number;
 }
+
+/** Units ordered in the last 7 days (orders that did not fall through). */
+const soldRecently = (productId: SQL | string) =>
+  sql<number>`(select coalesce(sum(i.quantity), 0)::int from order_items i join orders o on o.id = i.order_id where i.product_id = ${productId} and o.created_at > now() - interval '7 days' and o.status not in ('awaiting_payment', 'cancelled', 'returned', 'refunded'))`;
+/** Products added this recently get a "New" badge. */
+const NEW_FOR_MS = 14 * 86_400_000;
+/** Show "Only N left" at or below this many units across all variants. */
+const LOW_STOCK_UNITS = 5;
 
 const priceExpr = sql`least(${products.price}, coalesce(case when (${products.saleStartsAt} is null or ${products.saleStartsAt} <= now()) and (${products.saleEndsAt} is null or ${products.saleEndsAt} > now()) then ${products.salePrice} end, ${products.price}))`;
 
@@ -127,6 +135,7 @@ export async function listProducts(db: Database, f: ListFilters) {
         categorySlug: categories.slug,
         brandName: brands.name,
         available: sql<number>`(select coalesce(sum(greatest(l.on_hand - l.reserved, 0)), 0)::int from ${productVariants} v left join ${inventoryLevels} l on l.variant_id = v.id where v.product_id = ${products.id} and v.is_active)`,
+        soldRecently: soldRecently(sql`${products.id}`),
       })
       .from(products)
       .leftJoin(categories, eq(categories.id, products.categoryId))
@@ -151,7 +160,7 @@ export function productCard(
   p: typeof products.$inferSelect,
   promos: ActivePromotion[],
   images: ImageDTO[],
-  extra: { categoryName?: string | null; categorySlug?: string | null; brandName?: string | null; available?: number },
+  extra: { categoryName?: string | null; categorySlug?: string | null; brandName?: string | null; available?: number; soldRecently?: number },
 ) {
   const pr = effectivePrice(p, null, promos);
   return {
@@ -170,6 +179,11 @@ export function productCard(
     colours: p.colours,
     rating: p.ratingCount ? { average: p.ratingAverage / 100, count: p.ratingCount } : null,
     inStock: (extra.available ?? 1) > 0,
+    stockLeft: extra.available !== undefined && extra.available > 0 && extra.available <= LOW_STOCK_UNITS ? extra.available : null,
+    soldRecently: extra.soldRecently ?? 0,
+    isNew: Date.now() - p.createdAt.getTime() < NEW_FOR_MS,
+    /** When the product's own sale price ends, for a countdown on the card. */
+    saleEndsAt: pr.discountPercent > 0 && p.salePrice !== null && p.saleEndsAt && isSaleActive(p) ? p.saleEndsAt : null,
     isFeatured: p.isFeatured,
   };
 }
@@ -237,6 +251,7 @@ export async function productDetail(db: Database, reservations: StockReservation
   const promos = await activePromotions(db);
   const available = await reservations.available(variants.map((v) => v.id));
   const images = (await imagesFor(db, [row.p.id])).get(row.p.id) ?? [];
+  const [sold] = await db.execute<{ n: number }>(sql`select ${soldRecently(row.p.id)} as n`);
   const base = effectivePrice(row.p, null, promos);
   return {
     id: row.p.id,
@@ -257,6 +272,8 @@ export async function productDetail(db: Database, reservations: StockReservation
     brand: row.brandName,
     seo: { title: row.p.seoTitle ?? row.p.name, description: row.p.seoDescription ?? (row.p.description ? htmlToText(row.p.description).slice(0, 160) : null) },
     rating: row.p.ratingCount ? { average: row.p.ratingAverage / 100, count: row.p.ratingCount } : null,
+    soldRecently: sold?.n ?? 0,
+    isNew: Date.now() - row.p.createdAt.getTime() < NEW_FOR_MS,
     images,
     variants: variants.map((v) => {
       const pr = effectivePrice(row.p, v, promos);

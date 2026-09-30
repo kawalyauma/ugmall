@@ -25,6 +25,14 @@ export interface ProductCard {
   colours: string[];
   rating: { average: number; count: number } | null;
   inStock: boolean;
+  /** Units left across all variants, only when it is running low. */
+  stockLeft?: number | null;
+  /** Units ordered in the last 7 days. */
+  soldRecently?: number;
+  /** Added in the last 14 days. */
+  isNew?: boolean;
+  /** End of the product's own sale price, for a countdown. */
+  saleEndsAt?: string | null;
 }
 
 export interface Variant {

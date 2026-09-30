@@ -6,9 +6,10 @@ import { whatsappLink } from "@ugmall/shared";
 import { useStore } from "./providers";
 import { SearchBox } from "./search-box";
 import type { Category } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 export function Header({ categories }: { categories: Category[] }) {
-  const { settings, cart } = useStore();
+  const { settings, cart, cartBump } = useStore();
   const top = categories.filter((c) => !c.parentId);
 
   return (
@@ -32,7 +33,7 @@ export function Header({ categories }: { categories: Category[] }) {
           <Link href="/cart" className="relative rounded-full p-2 hover:bg-gray-100" aria-label="Cart">
             <ShoppingBag className="size-5" />
             {cart.count > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 grid size-5 place-items-center rounded-full bg-accent text-[11px] font-bold text-white">{cart.count}</span>
+              <span key={cartBump} className={cn("absolute -right-0.5 -top-0.5 grid size-5 place-items-center rounded-full bg-accent text-[11px] font-bold text-white", cartBump > 0 && "animate-pop")}>{cart.count}</span>
             )}
           </Link>
         </nav>
@@ -56,7 +57,7 @@ export function Header({ categories }: { categories: Category[] }) {
 }
 
 export function BottomNav() {
-  const { cart } = useStore();
+  const { cart, cartBump } = useStore();
   const items = [
     { href: "/", label: "Home", icon: Home },
     { href: "/categories", label: "Categories", icon: LayoutGrid },
@@ -71,7 +72,7 @@ export function BottomNav() {
           <Link key={i.href} href={i.href} className="relative flex flex-col items-center gap-0.5 py-2 text-[11px] text-gray-600 active:bg-gray-50">
             <i.icon className="size-5" />
             {i.label}
-            {i.badge ? <span className="absolute right-[calc(50%-18px)] top-1 grid size-4 place-items-center rounded-full bg-accent text-[10px] font-bold text-white">{i.badge}</span> : null}
+            {i.badge ? <span key={cartBump} className={cn("absolute right-[calc(50%-18px)] top-1 grid size-4 place-items-center rounded-full bg-accent text-[10px] font-bold text-white", cartBump > 0 && "animate-pop")}>{i.badge}</span> : null}
           </Link>
         ))}
       </div>

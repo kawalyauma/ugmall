@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Countdown } from "./countdown";
 
 export interface DealSlide {
   id: string;
@@ -12,6 +13,7 @@ export interface DealSlide {
   subtitle: string | null;
   image: string | null;
   mobileImage: string | null;
+  endsAt?: string | null;
 }
 
 const INTERVAL = 5000;
@@ -87,6 +89,9 @@ export function DealsCarousel({ slides }: { slides: DealSlide[] }) {
                 draggable={false}
               />
             </picture>
+            {s.endsAt && (
+              <Countdown endsAt={s.endsAt} className="absolute right-3 top-3 rounded-full bg-black/60 px-3 py-1 text-xs font-medium text-white shadow backdrop-blur-sm" />
+            )}
           </Link>
         ))}
       </div>

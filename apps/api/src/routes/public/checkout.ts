@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { Hono, type Context } from "hono";
 import { z } from "zod";
 import { and, asc, desc, eq } from "drizzle-orm";
-import { deliveries, orderItems, orderStatusHistory, orders, payments, staffUsers } from "@ugmall/database";
+import { deliveries, orderItems, orderStatusHistory, orders, payments, products, staffUsers } from "@ugmall/database";
 import { CartError, OrderError } from "@ugmall/orders";
 import { DeliveryError } from "@ugmall/delivery";
 import { PaymentError } from "@ugmall/payments";
@@ -128,7 +128,7 @@ const sha256 = (value: string) => createHash("sha256").update(value.trim().toLow
 trackingRoutes.post("/:orderNumber/meta-purchase", limit("meta-purchase", 10, 600), async (c) => {
   const input = await body(c, z.object({ t: z.string().optional(), eventId: z.string().min(8).max(120) }));
   const order = await findTrackedOrder(c, c.req.param("orderNumber"), input.t);
-  const qualifies = order.paymentStatus === "paid" || order.paymentMethod === "cash_on_delivery";
+  const qualifies = order.paymentStatus === "succeeded" || order.paymentMethod === "cash_on_delivery";
   if (!qualifies || order.status === "cancelled") throw new ApiError(409, "Order is not ready for purchase tracking");
 
   const pixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID;
@@ -189,7 +189,12 @@ trackingRoutes.get("/:orderNumber", async (c) => {
   const { db } = c.get("container");
   const order = await findTrackedOrder(c, c.req.param("orderNumber"), c.req.query("t"));
   const [items, history, pays, delivery] = await Promise.all([
-    db.select().from(orderItems).where(eq(orderItems.orderId, order.id)),
+    db
+      .select({ i: orderItems, productSlug: products.slug })
+      .from(orderItems)
+      .leftJoin(products, eq(products.id, orderItems.productId))
+      .where(eq(orderItems.orderId, order.id))
+      .then((rows) => rows.map((r) => ({ ...r.i, productSlug: r.productSlug }))),
     db.select().from(orderStatusHistory).where(eq(orderStatusHistory.orderId, order.id)).orderBy(asc(orderStatusHistory.createdAt)),
     db.select().from(payments).where(eq(payments.orderId, order.id)).orderBy(desc(payments.createdAt)),
     db
@@ -231,6 +236,7 @@ trackingRoutes.get("/:orderNumber", async (c) => {
     items: items.map((i) => ({
       id: i.id,
       productId: i.productId,
+      productSlug: i.productSlug,
       productName: i.productName,
       variantLabel: i.variantLabel,
       sku: i.sku,

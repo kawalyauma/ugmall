@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Heart, MessageCircle, Minus, Plus, Truck } from "lucide-react";
+import { Flame, Heart, MessageCircle, Minus, Plus, Sparkles, Truck } from "lucide-react";
 import { buildWhatsAppOrderMessage, formatUGX, whatsappLink } from "@ugmall/shared";
 import { api } from "@/lib/api";
 import type { Cart, ProductDetail } from "@/lib/types";
@@ -83,6 +83,20 @@ export function ProductPurchase({ product: p, whatsappNumber }: { product: Produ
           <div className="mt-3">
             <Price price={price} compareAt={compareAt} size="lg" />
           </div>
+          {(p.isNew || (p.soldRecently ?? 0) >= 3) && (
+            <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold">
+              {(p.soldRecently ?? 0) >= 3 && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2.5 py-1 text-orange-700">
+                  <Flame className="size-3.5 fill-orange-500 text-orange-500" /> {p.soldRecently} sold this week
+                </span>
+              )}
+              {p.isNew && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-brand-800">
+                  <Sparkles className="size-3.5" /> New arrival
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {axes.map((axis) => (

@@ -8,6 +8,7 @@ import { ProductGrid } from "@/components/product-card";
 import { ProductPurchase } from "./purchase";
 import { Reviews } from "./reviews";
 import { RecentlyViewedTracker } from "@/components/recently-viewed";
+import { FloatingWhatsApp } from "@/components/floating-whatsapp";
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -91,7 +92,8 @@ export default async function ProductPage({ params }: Props) {
           </dl>
         </section>
       )}
-      <Reviews productId={p.id} rating={p.rating} />
+      <Reviews productId={p.id} productSlug={p.slug} rating={p.rating} />
+      <FloatingWhatsApp number={settings.whatsappNumber} productName={p.name} />
       {p.related.length > 0 && (
         <section className="mt-8">
           <h2 className="mb-3 text-lg font-bold">You may also like</h2>

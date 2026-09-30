@@ -23,6 +23,28 @@ catalogRoutes.get("/categories", async (c) => {
     .leftJoin(mediaFiles, eq(mediaFiles.id, categories.imageId))
     .where(eq(categories.isActive, true))
     .orderBy(asc(categories.sortOrder), asc(categories.name));
+  // Categories without their own picture borrow one from a product in them (or in a subcategory),
+  // so the homepage category circles never show a blank.
+  const productPics = await db.execute<{ category_id: string; url: string }>(sql`
+    select distinct on (p.category_id) p.category_id, coalesce(m.variants->'thumb'->>'url', m.public_url) as url
+    from products p
+    join product_images pi on pi.product_id = p.id
+    join media_files m on m.id = pi.media_id
+    where p.status = 'active' and p.category_id is not null and m.public_url is not null
+    order by p.category_id, p.is_featured desc, p.created_at desc, pi.sort_order`);
+  const fallback = new Map(productPics.map((r) => [r.category_id, r.url]));
+  const children = new Map<string, string[]>();
+  for (const r of rows) if (r.c.parentId) children.set(r.c.parentId, [...(children.get(r.c.parentId) ?? []), r.c.id]);
+  const pictureFor = (id: string, seen = new Set<string>()): string | null => {
+    if (seen.has(id)) return null;
+    seen.add(id);
+    if (fallback.has(id)) return fallback.get(id)!;
+    for (const child of children.get(id) ?? []) {
+      const found = pictureFor(child, seen);
+      if (found) return found;
+    }
+    return null;
+  };
   c.header("Cache-Control", "public, max-age=60");
   return c.json(
     rows.map((r) => ({
@@ -31,7 +53,7 @@ catalogRoutes.get("/categories", async (c) => {
       slug: r.c.slug,
       parentId: r.c.parentId,
       description: r.c.description,
-      image: r.thumb ?? r.image,
+      image: r.thumb ?? r.image ?? pictureFor(r.c.id),
     })),
   );
 });

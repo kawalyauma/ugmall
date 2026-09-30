@@ -30,7 +30,7 @@ function Stars({ n, onPick }: { n: number; onPick?: (n: number) => void }) {
   );
 }
 
-export function Reviews({ productId, rating }: { productId: string; rating: { average: number; count: number } | null }) {
+export function Reviews({ productId, productSlug, rating }: { productId: string; productSlug: string; rating: { average: number; count: number } | null }) {
   const { customer, toast } = useStore();
   const [reviews, setReviews] = useState<Review[]>([]);
   const [open, setOpen] = useState(false);
@@ -42,6 +42,17 @@ export function Reviews({ productId, rating }: { productId: string; rating: { av
   useEffect(() => {
     api<Review[]>(`/store/products/${productId}/reviews`).then(setReviews, () => {});
   }, [productId]);
+
+  // Links from a delivered order ("Rate your items") land here with ?review=1.
+  const [wantsReview, setWantsReview] = useState(false);
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("review") !== "1") return;
+    setWantsReview(true);
+    document.getElementById("reviews")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+  useEffect(() => {
+    if (wantsReview && customer) setOpen(true);
+  }, [wantsReview, customer]);
 
   async function submit() {
     setBusy(true);
@@ -67,7 +78,7 @@ export function Reviews({ productId, rating }: { productId: string; rating: { av
   }
 
   return (
-    <section className="mt-8 rounded-2xl border border-gray-200 bg-white p-5">
+    <section id="reviews" className="mt-8 scroll-mt-24 rounded-2xl border border-gray-200 bg-white p-5">
       <div className="flex items-center justify-between">
         <h2 className="font-bold">
           Reviews {rating && <span className="ml-2 text-sm font-normal text-gray-500">{rating.average.toFixed(1)} ★ ({rating.count})</span>}
@@ -77,7 +88,7 @@ export function Reviews({ productId, rating }: { productId: string; rating: { av
             Write a review
           </Button>
         ) : (
-          <Link href="/account" className="text-sm text-brand-700">
+          <Link href={`/account?next=${encodeURIComponent(`/p/${productSlug}?review=1`)}`} className="text-sm text-brand-700">
             Sign in to review
           </Link>
         )}

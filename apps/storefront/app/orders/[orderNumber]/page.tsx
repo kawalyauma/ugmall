@@ -3,7 +3,7 @@
 import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { CheckCircle2, Circle, MessageCircle, Phone, Smartphone } from "lucide-react";
+import { CheckCircle2, Circle, MessageCircle, Phone, Smartphone, Star } from "lucide-react";
 import { DELIVERY_METHOD_LABELS, PAYMENT_METHOD_LABELS, TRACKING_STEPS, ORDER_STATUS_LABELS, formatUGX, whatsappLink, type OrderStatus, type PaymentMethod, type DeliveryMethod } from "@ugmall/shared";
 import { api } from "@/lib/api";
 import { useStore } from "@/components/providers";
@@ -34,8 +34,9 @@ interface Tracked {
   expiresAt: string | null;
   canRetryPayment: boolean;
   canCancel: boolean;
+  canReview?: boolean;
   latestPayment: { provider: string; status: string; failureReason: string | null; msisdn: string | null } | null;
-  items: { id: string; productId: string; productName: string; variantLabel: string | null; imageUrl: string | null; unitPrice: number; quantity: number; lineTotal: number }[];
+  items: { id: string; productId: string; productSlug?: string | null; productName: string; variantLabel: string | null; imageUrl: string | null; unitPrice: number; quantity: number; lineTotal: number }[];
   history: { status: OrderStatus; label: string; at: string }[];
   delivery: { status: string; riderName: string | null; riderPhone: string | null; carrierName: string | null; trackingNumber: string | null } | null;
 }
@@ -69,7 +70,7 @@ export default function OrderPage({ params }: { params: Promise<{ orderNumber: s
 
   useEffect(() => {
     if (!order || !isNew || purchaseSent || order.status === "cancelled") return;
-    const qualifies = order.paymentStatus === "paid" || order.paymentMethod === "cash_on_delivery";
+    const qualifies = order.paymentStatus === "succeeded" || order.paymentMethod === "cash_on_delivery";
     if (!qualifies) return;
     const key = `ugmall.purchase.${order.orderNumber}`;
     if (sessionStorage.getItem(key)) {
@@ -219,6 +220,28 @@ export default function OrderPage({ params }: { params: Promise<{ orderNumber: s
           </div>
         )}
       </div>
+
+      {order.canReview && order.items.some((i) => i.productSlug) && (
+        <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 p-4">
+          <div className="flex items-center gap-2 font-bold text-amber-900">
+            <Star className="size-5 fill-accent text-accent" /> How was your order?
+          </div>
+          <p className="mt-1 text-sm text-amber-900/80">Rate your items to help other shoppers choose.</p>
+          <div className="mt-3 space-y-2">
+            {order.items
+              .filter((i, idx, all) => i.productSlug && all.findIndex((x) => x.productSlug === i.productSlug) === idx)
+              .map((i) => (
+                <Link key={i.id} href={`/p/${i.productSlug}?review=1`} className="flex items-center gap-3 rounded-xl bg-white p-2 text-sm shadow-sm transition hover:shadow-md">
+                  <div className="size-12 shrink-0 overflow-hidden rounded-lg bg-gray-100">{i.imageUrl && <img src={i.imageUrl} alt="" className="size-full object-cover" />}</div>
+                  <span className="line-clamp-2 flex-1 font-medium">{i.productName}</span>
+                  <span className="inline-flex shrink-0 items-center gap-0.5 text-accent">
+                    {[1, 2, 3, 4, 5].map((n) => <Star key={n} className="size-3.5" />)}
+                  </span>
+                </Link>
+              ))}
+          </div>
+        </div>
+      )}
 
       <div className="rounded-2xl border border-gray-200 bg-white p-4">
         <div className="space-y-2">

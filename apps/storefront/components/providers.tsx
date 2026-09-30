@@ -1,6 +1,8 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { CheckCircle2 } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Cart, ShopSettings } from "@/lib/types";
 
@@ -15,6 +17,8 @@ interface StoreCtx {
   cart: Cart;
   refreshCart: () => Promise<void>;
   setCart: (c: Cart) => void;
+  /** Bumps whenever the cart grows, so the cart badge can animate. */
+  cartBump: number;
   customer: Customer | null | undefined;
   refreshCustomer: () => Promise<void>;
   toast: (msg: string) => void;
@@ -24,12 +28,21 @@ const Ctx = createContext<StoreCtx | null>(null);
 const EMPTY: Cart = { items: [], count: 0, subtotal: 0, hasStockIssues: false };
 
 export function StoreProvider({ settings, children }: { settings: ShopSettings; children: React.ReactNode }) {
-  const [cart, setCart] = useState<Cart>(EMPTY);
+  const [cart, setCartState] = useState<Cart>(EMPTY);
+  const [cartBump, setCartBump] = useState(0);
+  const lastCount = useRef(0);
+  const setCart = useCallback((c: Cart) => {
+    if (c.count > lastCount.current) setCartBump((n) => n + 1);
+    lastCount.current = c.count;
+    setCartState(c);
+  }, []);
   const [customer, setCustomer] = useState<Customer | null | undefined>(undefined);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   const refreshCart = useCallback(async () => {
-    setCart(await api<Cart>("/store/cart").catch(() => EMPTY));
+    const c = await api<Cart>("/store/cart").catch(() => EMPTY);
+    lastCount.current = c.count;
+    setCartState(c);
   }, []);
   const refreshCustomer = useCallback(async () => {
     setCustomer(await api<Customer | null>("/store/account/me").catch(() => null));
@@ -45,11 +58,25 @@ export function StoreProvider({ settings, children }: { settings: ShopSettings; 
   }, [refreshCart, refreshCustomer]);
 
   return (
-    <Ctx.Provider value={{ settings, cart, refreshCart, setCart, customer, refreshCustomer, toast }}>
+    <Ctx.Provider value={{ settings, cart, refreshCart, setCart, cartBump, customer, refreshCustomer, toast }}>
       {children}
       {toastMsg && (
-        <div role="status" className="fixed inset-x-4 bottom-24 z-50 mx-auto max-w-sm rounded-xl bg-gray-900 px-4 py-3 text-center text-sm text-white shadow-lg md:bottom-8">
-          {toastMsg}
+        <div
+          key={toastMsg}
+          role="status"
+          className="fixed inset-x-4 bottom-24 z-50 mx-auto flex max-w-sm animate-toast-in items-center gap-3 rounded-2xl bg-gray-900 px-4 py-3 text-sm text-white shadow-xl md:bottom-8"
+        >
+          {/added to cart/i.test(toastMsg) ? (
+            <>
+              <CheckCircle2 className="size-5 shrink-0 text-emerald-400" />
+              <span className="flex-1">{toastMsg}</span>
+              <Link href="/cart" className="shrink-0 rounded-lg bg-white/15 px-3 py-1.5 text-xs font-bold hover:bg-white/25">
+                View cart
+              </Link>
+            </>
+          ) : (
+            <span className="flex-1 text-center">{toastMsg}</span>
+          )}
         </div>
       )}
     </Ctx.Provider>
