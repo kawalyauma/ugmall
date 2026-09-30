@@ -13,9 +13,9 @@ type Action = { id: string; runId: string; agentKey: WorkerKey; actionType: stri
 type Overview = { items: Run[]; actionCounts: Record<string, number>; workers: WorkerKey[] };
 
 const workers: Record<WorkerKey, { title: string; role: string; icon: typeof Bot; tone: string; examples: string[] }> = {
-  catalogue: { title: "Catalogue Manager", role: "Audits product quality, improves content, marks strong products trending and creates safe image formats.", icon: Sparkles, tone: "from-violet-600 to-indigo-700", examples: ["Quality & SEO", "Trending picks", "Image variants"] },
-  campaigns: { title: "Campaign Manager", role: "Builds focused, time-boxed storefront campaigns from active products and real stock signals.", icon: Megaphone, tone: "from-rose-500 to-orange-600", examples: ["Campaign strategy", "Product selection", "Timed promotions"] },
-  discounts: { title: "Discount Manager", role: "Designs controlled coupon offers with expiry, usage caps and strict discount guardrails.", icon: Tag, tone: "from-emerald-600 to-teal-700", examples: ["Coupon offers", "15% safety cap", "Usage limits"] },
+  catalogue: { title: "Catalogue Manager", role: "Continuously improves product content, categories, visibility, safe pricing and image formats.", icon: Sparkles, tone: "from-violet-600 to-indigo-700", examples: ["Products & SEO", "Pricing & visibility", "Image variants"] },
+  campaigns: { title: "Campaign Manager", role: "Creates, improves, activates, retires and cleans up storefront campaigns using live shop signals.", icon: Megaphone, tone: "from-rose-500 to-orange-600", examples: ["Campaign lifecycle", "Product selection", "Automatic cleanup"] },
+  discounts: { title: "Discount Manager", role: "Creates, adjusts, activates, retires and cleans up coupons within profitability guardrails.", icon: Tag, tone: "from-emerald-600 to-teal-700", examples: ["Coupon lifecycle", "15% safety cap", "Automatic cleanup"] },
   whatsapp: { title: "WhatsApp Care Agent", role: "Handles customer support, order tracking and cancellations, return requests, escalations and admin communications.", icon: MessageCircle, tone: "from-green-500 to-emerald-700", examples: ["Customer care", "Orders & returns", "Approval alerts"] },
 };
 
@@ -53,13 +53,13 @@ export default function AgentsPage() {
     <div className="space-y-5">
       <PageHeader
         title="AI Workforce"
-        subtitle="Codex-powered business workers. Every recommendation waits for approval and every executed change keeps before/after evidence."
+        subtitle="Autonomous Codex-powered workers run on schedule, execute validated improvements, and keep before/after evidence. You can still run them on demand."
         actions={<button onClick={() => void reload()} className="inline-flex items-center gap-2 rounded-xl border bg-white px-3 py-2 text-sm font-medium shadow-sm hover:bg-gray-50"><RefreshCw className="size-4" /> Refresh</button>}
       />
 
       <div className="overflow-hidden rounded-2xl bg-slate-950 p-5 text-white shadow-xl">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3"><div className="rounded-2xl bg-white/10 p-3"><ShieldCheck className="size-7 text-emerald-300" /></div><div><div className="text-lg font-bold">Governed autonomy</div><div className="text-sm text-slate-300">Codex proposes. UG Mall validates. You approve. The audit trail remembers.</div></div></div>
+          <div className="flex items-center gap-3"><div className="rounded-2xl bg-white/10 p-3"><ShieldCheck className="size-7 text-emerald-300" /></div><div><div className="text-lg font-bold">Always-on autonomy</div><div className="text-sm text-slate-300">Workers inspect, improve and clean up automatically. UG Mall validates every write and preserves the audit trail.</div></div></div>
           <div className="flex gap-5 text-center"><div><div className="text-2xl font-black">{pending.length}</div><div className="text-xs text-slate-400">Awaiting approval</div></div><div><div className="text-2xl font-black">{overview.data?.actionCounts.executed ?? 0}</div><div className="text-xs text-slate-400">Executed</div></div><div><div className="text-2xl font-black">4</div><div className="text-xs text-slate-400">Active roles</div></div></div>
         </div>
       </div>

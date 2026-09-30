@@ -1,13 +1,14 @@
 import { Worker, type Job } from "bullmq";
-import { and, eq, lt, sql } from "drizzle-orm";
-import { agentActions, orders, payments } from "@ugmall/database";
+import { z } from "zod";
+import { and, eq, gt, inArray, lt, sql } from "drizzle-orm";
+import { agentActions, agentRuns, orders, payments } from "@ugmall/database";
 import { AdminWhatsAppService, NotificationService, type AdminWhatsAppJob, type NotificationJob, type WhatsAppCareJob } from "@ugmall/notifications";
 import { createContainer } from "./container";
 import { logger } from "./lib/logger";
 import { QUEUE_NAMES } from "./queues";
 import { importProductImages } from "./lib/product-import";
 import type { ImageJob } from "@ugmall/importer";
-import { processAgentRun } from "./lib/agent-workforce";
+import { AGENT_KEYS, buildAgentContext, contextHash, processAgentRun, PROMPT_VERSION, type AgentKey } from "./lib/agent-workforce";
 import { WhatsAppCareAgent } from "./lib/whatsapp-care-agent";
 import { ConfiguredWhatsAppProvider } from "./lib/whatsapp-provider";
 import { getWhatsAppRuntimeSettings } from "./lib/settings";
@@ -33,6 +34,34 @@ const careAgent = new WhatsAppCareAgent(db, orderService, storage, whatsapp, {
   adminUrl: env.ADMIN_URL,
   shopName: env.SHOP_NAME,
 });
+
+const AUTONOMY_INTERVALS: Record<AgentKey, number> = {
+  catalogue: 24 * 60 * 60_000,
+  campaigns: 12 * 60 * 60_000,
+  discounts: 24 * 60 * 60_000,
+  whatsapp: 6 * 60 * 60_000,
+};
+
+async function enqueueAutonomousRun(agentKey: AgentKey) {
+  const recent = await db.select({ id: agentRuns.id }).from(agentRuns).where(and(
+    eq(agentRuns.agentKey, agentKey),
+    eq(agentRuns.trigger, "automatic"),
+    inArray(agentRuns.status, ["queued", "running", "completed"]),
+    gt(agentRuns.createdAt, new Date(Date.now() - AUTONOMY_INTERVALS[agentKey])),
+  )).limit(1);
+  if (recent.length) return;
+  const context = await buildAgentContext(db, agentKey);
+  const [run] = await db.insert(agentRuns).values({
+    agentKey,
+    trigger: "automatic",
+    objective: "Autonomously inspect the shop, execute every supported beneficial improvement, and clean up expired, duplicate, empty, or harmful records.",
+    promptVersion: PROMPT_VERSION,
+    inputHash: contextHash(context),
+    inputSnapshot: context,
+    requestedBy: null,
+  }).returning();
+  await queues.agents.add(agentKey, { runId: run!.id }, { jobId: `agent-${run!.id}` });
+}
 
 async function enqueueApprovalAlerts(runId?: string) {
   const adminPhone = (await getWhatsAppRuntimeSettings(db, env.APP_SECRET, env)).adminNumber;
@@ -94,7 +123,7 @@ const workers = [
   // Codex is intentionally single-concurrency: predictable cost/load and a
   // complete audit record matter more than throughput for business workers.
   new Worker<{ runId: string }>(QUEUE_NAMES.agents, async (job) => {
-    await processAgentRun(db, job.data.runId);
+    await processAgentRun(db, storage, job.data.runId);
     await enqueueApprovalAlerts(job.data.runId);
   }, { connection, concurrency: 1 }),
 
@@ -131,6 +160,10 @@ const workers = [
         }
         if (removed) logger.info(`removed ${removed} temp files`);
       }
+      if (job.name === "autonomous-agent") {
+        const agentKey = z.enum(AGENT_KEYS).parse((job.data as { agentKey?: string }).agentKey);
+        await enqueueAutonomousRun(agentKey);
+      }
     },
     { connection },
   ),
@@ -143,6 +176,10 @@ for (const w of workers) {
 
 await queues.maintenance.upsertJobScheduler("sweep-unpaid", { every: 5 * 60_000 }, { name: "sweep-unpaid" });
 await queues.maintenance.upsertJobScheduler("clean-temp", { every: 6 * 3600_000 }, { name: "clean-temp" });
+for (const agentKey of AGENT_KEYS) {
+  await queues.maintenance.upsertJobScheduler(`autonomy-${agentKey}`, { every: AUTONOMY_INTERVALS[agentKey] }, { name: "autonomous-agent", data: { agentKey } });
+  await enqueueAutonomousRun(agentKey).catch((error) => logger.warn({ agentKey, error }, "unable to enqueue autonomous agent"));
+}
 await enqueueApprovalAlerts().catch((error) => logger.warn({ error }, "unable to enqueue existing agent approvals"));
 logger.info("worker started");
 

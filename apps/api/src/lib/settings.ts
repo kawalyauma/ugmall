@@ -108,20 +108,21 @@ function decryptSetting(value: unknown, appSecret: string) {
   }
 }
 
-export async function getWhatsAppRuntimeSettings(db: Database, appSecret: string, env: Partial<Record<string, string | boolean | undefined>> = {}): Promise<WhatsAppRuntimeSettings> {
+export async function getWhatsAppRuntimeSettings(db: Database, appSecret: string, env: Partial<Record<string, unknown>> = {}): Promise<WhatsAppRuntimeSettings> {
   const rows = await db.select().from(settings).where(inArray(settings.key, Object.values(WA_KEYS)));
   const values = Object.fromEntries(rows.map((row) => [row.key, row.value])) as Record<string, unknown>;
+  const storedUseTemplates = values[WA_KEYS.useTemplates];
   return {
     hubUrl: String(values[WA_KEYS.hubUrl] ?? env.WHATSAPP_SUPPORT_HUB_URL ?? "").trim() || undefined,
     appKey: decryptSetting(values[WA_KEYS.appKey], appSecret) ?? (typeof env.WHATSAPP_SUPPORT_APP_KEY === "string" ? env.WHATSAPP_SUPPORT_APP_KEY : undefined),
     webhookSecret: decryptSetting(values[WA_KEYS.webhookSecret], appSecret) ?? (typeof env.WHATSAPP_SUPPORT_WEBHOOK_SECRET === "string" ? env.WHATSAPP_SUPPORT_WEBHOOK_SECRET : undefined),
     adminNumber: String(values[WA_KEYS.adminNumber] ?? env.WHATSAPP_ADMIN_NUMBER ?? "").trim() || undefined,
-    useTemplates: typeof values[WA_KEYS.useTemplates] === "boolean" ? values[WA_KEYS.useTemplates] : Boolean(env.WHATSAPP_USE_TEMPLATES),
+    useTemplates: typeof storedUseTemplates === "boolean" ? storedUseTemplates : Boolean(env.WHATSAPP_USE_TEMPLATES),
     templateLanguage: String(values[WA_KEYS.templateLanguage] ?? env.WHATSAPP_TEMPLATE_LANGUAGE ?? "en").trim() || "en",
   };
 }
 
-export async function getWhatsAppSettingsStatus(db: Database, appSecret: string, env: Partial<Record<string, string | boolean | undefined>> = {}) {
+export async function getWhatsAppSettingsStatus(db: Database, appSecret: string, env: Partial<Record<string, unknown>> = {}) {
   const cfg = await getWhatsAppRuntimeSettings(db, appSecret, env);
   return {
     hubUrl: cfg.hubUrl ?? "",

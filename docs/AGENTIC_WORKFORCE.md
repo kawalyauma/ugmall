@@ -7,19 +7,19 @@ UG Mall's governed business workers use the Codex CLI authenticated with the ser
 ### Catalogue Manager
 
 - Audits active and draft products for weak titles, descriptions, tags, SEO and image quality.
-- Can propose truthful catalogue edits and mark products as featured/trending.
+- Autonomously executes truthful catalogue, category, publishing, pricing, sale-window and featured-placement improvements.
 - Can derive three useful formats from an existing product image: clean square, portrait and attention-based detail crop.
 - Never generates an unseen angle, colour, logo, specification or product feature. The original image is retained.
 
 ### Campaign Manager
 
 - Selects active products using catalogue, stock and historical order signals.
-- Can propose and create a time-boxed storefront promotion.
+- Can create, update, activate, deactivate and delete storefront promotions.
 - Campaign discounts are capped at 25% and a campaign cannot run for more than 31 days.
 
 ### Discount Manager
 
-- Can propose and create percent, fixed-value or free-delivery coupons.
+- Can create, update, activate, deactivate and delete percent, fixed-value or free-delivery coupons. Used coupons are deactivated instead of physically deleted so redemption history remains intact.
 - Percent coupons are capped at 15%.
 - A fixed coupon cannot exceed 15% of its minimum order value.
 - Every coupon has an expiry, a total-use cap and a per-customer cap.
@@ -36,13 +36,13 @@ UG Mall's governed business workers use the Codex CLI authenticated with the ser
 
 ## Governance and audit lifecycle
 
-1. A staff member starts a worker run from **Admin → AI Workforce** and may add a short objective.
+1. Workers run automatically on recurring schedules. Staff may also start an immediate focused run from **Admin → AI Workforce**.
 2. The application creates a frozen input snapshot and SHA-256 hash before queueing the work.
 3. Codex runs in an ephemeral, read-only sandbox with a stripped environment. The prompt contains business context but no database, payment, WhatsApp or server credentials.
-4. Codex returns structured proposals. Invalid or unsupported output is rejected.
-5. Every proposal enters `awaiting_approval`; Codex cannot write to the shop database.
-6. A staff member with `agents.approve` reviews the exact payload and chooses **Approve & execute** or **Reject**, either in Admin or from the authenticated administrator WhatsApp number.
-7. The application revalidates business limits, executes the typed action and stores before/after snapshots, actor IDs and timestamps.
+4. Codex returns typed actions. Invalid or unsupported output is rejected.
+5. The application independently revalidates IDs, dates, margins, discount limits and state before executing each action.
+6. Valid actions execute automatically; failures are isolated to that action and recorded instead of stopping the whole run.
+7. Before/after snapshots, timestamps and automatic-system audit entries remain available in Admin. The manual approval inbox remains available for legacy or explicitly approval-controlled actions.
 
 The durable records are `agent_runs`, `agent_actions`, and the general `audit_log`. Idempotency keys prevent a proposal from being applied twice.
 
@@ -66,6 +66,11 @@ only through a Unix socket; the runner has no database or payment credentials.
 
 Before deployment, verify the host login with `codex login status`. The expected result is `Logged in using ChatGPT`.
 
-## Initial operating policy
+## Automatic schedule
 
-All actions require a human approval. After the audit history demonstrates reliable behaviour, individually low-risk actions can be considered for automatic execution. Discount creation and campaign publication should remain approval-controlled.
+- Catalogue: every 24 hours.
+- Campaigns: every 12 hours.
+- Discounts: every 24 hours.
+- Communications review: every 6 hours; live WhatsApp customer care remains event-driven and continuous.
+
+The worker also queues a missing scheduled review at startup. Overlap checks prevent duplicate runs for the same role and interval.
