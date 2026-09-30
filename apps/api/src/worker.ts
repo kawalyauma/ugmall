@@ -43,24 +43,30 @@ const AUTONOMY_INTERVALS: Record<AgentKey, number> = {
 };
 
 async function enqueueAutonomousRun(agentKey: AgentKey) {
-  const recent = await db.select({ id: agentRuns.id }).from(agentRuns).where(and(
-    eq(agentRuns.agentKey, agentKey),
-    eq(agentRuns.trigger, "automatic"),
-    inArray(agentRuns.status, ["queued", "running", "completed"]),
-    gt(agentRuns.createdAt, new Date(Date.now() - AUTONOMY_INTERVALS[agentKey])),
-  )).limit(1);
-  if (recent.length) return;
   const context = await buildAgentContext(db, agentKey);
-  const [run] = await db.insert(agentRuns).values({
-    agentKey,
-    trigger: "automatic",
-    objective: "Autonomously inspect the shop, execute every supported beneficial improvement, and clean up expired, duplicate, empty, or harmful records.",
-    promptVersion: PROMPT_VERSION,
-    inputHash: contextHash(context),
-    inputSnapshot: context,
-    requestedBy: null,
-  }).returning();
-  await queues.agents.add(agentKey, { runId: run!.id }, { jobId: `agent-${run!.id}` });
+  const runId = await db.transaction(async (tx) => {
+    // The repeat scheduler's first tick can coincide with startup catch-up.
+    // Serialize each role so only one automatic run is created per interval.
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`ugmall:autonomy:${agentKey}`}))`);
+    const recent = await tx.select({ id: agentRuns.id }).from(agentRuns).where(and(
+      eq(agentRuns.agentKey, agentKey),
+      eq(agentRuns.trigger, "automatic"),
+      inArray(agentRuns.status, ["queued", "running", "completed"]),
+      gt(agentRuns.createdAt, new Date(Date.now() - AUTONOMY_INTERVALS[agentKey])),
+    )).limit(1);
+    if (recent.length) return null;
+    const [run] = await tx.insert(agentRuns).values({
+      agentKey,
+      trigger: "automatic",
+      objective: "Autonomously inspect the shop, execute every supported beneficial improvement, and clean up expired, duplicate, empty, or harmful records.",
+      promptVersion: PROMPT_VERSION,
+      inputHash: contextHash(context),
+      inputSnapshot: context,
+      requestedBy: null,
+    }).returning({ id: agentRuns.id });
+    return run!.id;
+  });
+  if (runId) await queues.agents.add(agentKey, { runId }, { jobId: `agent-${runId}` });
 }
 
 async function enqueueApprovalAlerts(runId?: string) {

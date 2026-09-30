@@ -369,7 +369,7 @@ export async function executeAgentAction(db: Database, storage: StorageProvider,
 }
 
 export async function processAgentRun(db: Database, storage: StorageProvider, runId: string) {
-  const [run] = await db.update(agentRuns).set({ status: "running", startedAt: new Date(), error: null }).where(eq(agentRuns.id, runId)).returning();
+  const [run] = await db.update(agentRuns).set({ status: "running", startedAt: new Date(), error: null }).where(and(eq(agentRuns.id, runId), eq(agentRuns.status, "queued"))).returning();
   if (!run) return;
   try {
     const key = z.enum(AGENT_KEYS).parse(run.agentKey);
