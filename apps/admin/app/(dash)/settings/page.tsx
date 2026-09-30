@@ -6,7 +6,17 @@ import { useApi } from "@/lib/hooks";
 import { useToast } from "@/components/toast";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Textarea } from "@/components/ui/input";
-import { Card, PageHeader, StatusBadge, Table, dt, money } from "@/components/ui/kit";
+import { Badge, Card, PageHeader, StatusBadge, Table, dt, money } from "@/components/ui/kit";
+
+type WhatsAppSettings = {
+  hubUrl: string;
+  adminNumber: string;
+  useTemplates: boolean;
+  templateLanguage: string;
+  appKeyConfigured: boolean;
+  webhookSecretConfigured: boolean;
+  ready: boolean;
+};
 
 const FIELDS: [string, string, "text" | "textarea" | "bool" | "number"][] = [
   ["codMaxOrderTotal", "Cash on Delivery limit (UGX, order total incl. delivery; 0 = no limit)", "number"],
@@ -34,10 +44,25 @@ export default function SettingsPage() {
   const { data: queues } = useApi<Record<string, Record<string, number>>>("/admin/system/queues");
   const { data: providers } = useApi<{ id: string; name: string; methods: string[]; offline: boolean; balance: { amount?: number; error?: string } | null }[]>("/admin/payment-providers");
   const { data: notes, reload: reloadNotes } = useApi<{ id: string; template: string; recipient: string; status: string; error: string | null; attempts: number; createdAt: string }[]>("/admin/notifications?limit=50");
+  const { data: whatsappSettings, reload: reloadWhatsApp } = useApi<WhatsAppSettings>("/admin/settings/whatsapp");
   const [f, setF] = useState<Record<string, string | boolean | number>>({});
+  const [wa, setWa] = useState({ hubUrl: "", adminNumber: "", useTemplates: false, templateLanguage: "en", appKey: "", webhookSecret: "" });
   useEffect(() => {
     if (data) setF(data);
   }, [data]);
+  useEffect(() => {
+    if (whatsappSettings) setWa((current) => ({ ...current, hubUrl: whatsappSettings.hubUrl, adminNumber: whatsappSettings.adminNumber, useTemplates: whatsappSettings.useTemplates, templateLanguage: whatsappSettings.templateLanguage, appKey: "", webhookSecret: "" }));
+  }, [whatsappSettings]);
+
+  const saveWhatsApp = async () => {
+    try {
+      await api("/admin/settings/whatsapp", { method: "PUT", body: wa });
+      await reloadWhatsApp();
+      toast("WhatsApp settings saved");
+    } catch (e) {
+      toast((e as Error).message, "error");
+    }
+  };
 
   return (
     <>
@@ -59,6 +84,30 @@ export default function SettingsPage() {
           </div>
         </Card>
         <div className="space-y-4">
+          <Card title={<span className="flex items-center gap-2">WhatsApp Support Hub <Badge tone={whatsappSettings?.ready ? "green" : "amber"}>{whatsappSettings?.ready ? "Ready" : "Setup needed"}</Badge></span>} actions={<Button size="sm" onClick={saveWhatsApp}>Save WhatsApp</Button>}>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Support Hub URL" className="sm:col-span-2" hint="The URL of your deployed WhatsApp Support Hub.">
+                <Input type="url" placeholder="https://whatsapp-support-hub.example.workers.dev" value={wa.hubUrl} onChange={(e) => setWa((s) => ({ ...s, hubUrl: e.target.value }))} />
+              </Field>
+              <Field label="Application key" hint={whatsappSettings?.appKeyConfigured ? "Configured — leave blank to keep it" : "Create this application key in the Support Hub"}>
+                <Input type="password" autoComplete="new-password" value={wa.appKey} onChange={(e) => setWa((s) => ({ ...s, appKey: e.target.value }))} />
+              </Field>
+              <Field label="Webhook signing secret" hint={whatsappSettings?.webhookSecretConfigured ? "Configured — leave blank to keep it" : "Use the same secret in the Support Hub webhook"}>
+                <Input type="password" autoComplete="new-password" value={wa.webhookSecret} onChange={(e) => setWa((s) => ({ ...s, webhookSecret: e.target.value }))} />
+              </Field>
+              <Field label="Admin WhatsApp number" hint="This active staff number can approve or reject requests in chat.">
+                <Input inputMode="tel" placeholder="2567XXXXXXXX" value={wa.adminNumber} onChange={(e) => setWa((s) => ({ ...s, adminNumber: e.target.value.replace(/\D/g, "") }))} />
+              </Field>
+              <Field label="Template language">
+                <Input value={wa.templateLanguage} onChange={(e) => setWa((s) => ({ ...s, templateLanguage: e.target.value }))} />
+              </Field>
+              <label className="flex items-center gap-2 text-sm sm:col-span-2">
+                <input type="checkbox" className="size-5 accent-brand-700" checked={wa.useTemplates} onChange={(e) => setWa((s) => ({ ...s, useTemplates: e.target.checked }))} />
+                Use approved WhatsApp templates for outbound order updates
+              </label>
+            </div>
+            <p className="mt-3 text-xs text-gray-500">Register <code>/api/webhooks/whatsapp-support</code> as this app’s webhook in the Support Hub. Secret values are encrypted and are never shown again.</p>
+          </Card>
           <Card title="Payment providers">
             <Table
               rows={providers ?? []}

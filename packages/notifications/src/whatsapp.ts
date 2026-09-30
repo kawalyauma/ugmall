@@ -13,8 +13,53 @@ export interface SendResult {
 
 export interface WhatsAppProvider {
   readonly name: string;
-  sendText(toE164: string, body: string): Promise<SendResult>;
-  sendTemplate(toE164: string, template: TemplateMessage): Promise<SendResult>;
+  sendText(toE164: string, body: string, opts?: { idempotencyKey?: string }): Promise<SendResult>;
+  sendTemplate(toE164: string, template: TemplateMessage, opts?: { idempotencyKey?: string }): Promise<SendResult>;
+  sendButtons?(toE164: string, body: string, buttons: { id: string; title: string }[], opts?: { idempotencyKey?: string }): Promise<SendResult>;
+}
+
+type HubResponse = { data?: { message?: { externalMessageId?: string; external_message_id?: string }; conversationId?: string }; error?: { message?: string } | string };
+
+/**
+ * Adapter for the standalone WhatsApp Support Hub. The Hub owns the Meta
+ * credentials, chat history and delivery state; UG Mall only holds its
+ * application-scoped API key.
+ */
+export class WhatsAppSupportHubProvider implements WhatsAppProvider {
+  readonly name = "whatsapp_support_hub";
+
+  constructor(private opts: { baseUrl: string; apiKey: string; fetch?: typeof fetch }) {}
+
+  private async post(payload: Record<string, unknown>, idempotencyKey?: string): Promise<SendResult> {
+    const res = await (this.opts.fetch ?? fetch)(`${this.opts.baseUrl.replace(/\/+$/, "")}/v1/integrations/messages/send`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-API-Key": this.opts.apiKey,
+        ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
+      },
+      body: JSON.stringify({ reopenClosed: true, ...payload }),
+      signal: AbortSignal.timeout(20_000),
+    });
+    const json = (await res.json().catch(() => ({}))) as HubResponse;
+    if (!res.ok) {
+      const message = typeof json.error === "string" ? json.error : json.error?.message;
+      throw new Error(`WhatsApp Support Hub ${res.status}: ${message ?? "unknown error"}`);
+    }
+    return { messageId: json.data?.message?.externalMessageId ?? json.data?.message?.external_message_id };
+  }
+
+  sendText(to: string, body: string, opts: { idempotencyKey?: string } = {}) {
+    return this.post({ phoneNumber: to, type: "text", message: body, previewUrl: true }, opts.idempotencyKey);
+  }
+
+  sendTemplate(to: string, t: TemplateMessage, opts: { idempotencyKey?: string } = {}) {
+    return this.post({ phoneNumber: to, type: "template", templateName: t.name, languageCode: t.language, variables: { body: t.bodyParams } }, opts.idempotencyKey);
+  }
+
+  sendButtons(to: string, body: string, buttons: { id: string; title: string }[], opts: { idempotencyKey?: string } = {}) {
+    return this.post({ phoneNumber: to, type: "buttons", body, buttons }, opts.idempotencyKey);
+  }
 }
 
 /**
@@ -75,6 +120,9 @@ export class ConsoleWhatsAppProvider implements WhatsAppProvider {
 }
 
 export function createWhatsAppFromEnv(env: NodeJS.ProcessEnv = process.env): WhatsAppProvider {
+  if (env.WHATSAPP_SUPPORT_HUB_URL && env.WHATSAPP_SUPPORT_APP_KEY) {
+    return new WhatsAppSupportHubProvider({ baseUrl: env.WHATSAPP_SUPPORT_HUB_URL, apiKey: env.WHATSAPP_SUPPORT_APP_KEY });
+  }
   if (env.WHATSAPP_PHONE_NUMBER_ID && env.WHATSAPP_ACCESS_TOKEN) {
     return new WhatsAppCloudProvider({
       phoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID,
@@ -83,6 +131,14 @@ export function createWhatsAppFromEnv(env: NodeJS.ProcessEnv = process.env): Wha
     });
   }
   return new ConsoleWhatsAppProvider();
+}
+
+/** Verifies the application webhook emitted by the WhatsApp Support Hub. */
+export function verifySupportHubSignature(secret: string, rawBody: string, header: string | undefined): boolean {
+  if (!header?.startsWith("sha256=")) return false;
+  const expected = Buffer.from(`sha256=${createHmac("sha256", secret).update(rawBody).digest("hex")}`);
+  const given = Buffer.from(header);
+  return expected.length === given.length && timingSafeEqual(expected, given);
 }
 
 /** Verifies Meta's X-Hub-Signature-256 header on webhook deliveries. */

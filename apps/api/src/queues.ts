@@ -1,7 +1,7 @@
 import { Queue, type ConnectionOptions } from "bullmq";
 import { eq } from "drizzle-orm";
 import { orderItems, orders, staffUsers, type Database } from "@ugmall/database";
-import type { NotificationEvent, NotificationJob } from "@ugmall/notifications";
+import type { AdminWhatsAppJob, NotificationEvent, NotificationJob, WhatsAppCareJob } from "@ugmall/notifications";
 import type { OrderEffects } from "@ugmall/orders";
 import type { ImageJob } from "@ugmall/importer";
 import { prettyUgPhone } from "@ugmall/shared";
@@ -13,12 +13,13 @@ export const QUEUE_NAMES = {
   maintenance: "maintenance",
   imports: "imports",
   agents: "agent-workforce",
+  whatsappCare: "whatsapp-care",
 } as const;
 
 export function createQueues(connection: ConnectionOptions) {
   const defaultJobOptions = { removeOnComplete: 1000, removeOnFail: 5000 };
   return {
-    notifications: new Queue<NotificationJob>(QUEUE_NAMES.notifications, {
+    notifications: new Queue<NotificationJob | AdminWhatsAppJob>(QUEUE_NAMES.notifications, {
       connection,
       defaultJobOptions: { ...defaultJobOptions, attempts: 6, backoff: { type: "exponential", delay: 30_000 } },
     }),
@@ -33,6 +34,10 @@ export function createQueues(connection: ConnectionOptions) {
       connection,
       defaultJobOptions: { ...defaultJobOptions, attempts: 2, backoff: { type: "exponential", delay: 60_000 } },
     }),
+    whatsappCare: new Queue<WhatsAppCareJob>(QUEUE_NAMES.whatsappCare, {
+      connection,
+      defaultJobOptions: { ...defaultJobOptions, attempts: 5, backoff: { type: "exponential", delay: 10_000 } },
+    }),
   };
 }
 export type Queues = ReturnType<typeof createQueues>;
@@ -41,7 +46,7 @@ export type Queues = ReturnType<typeof createQueues>;
 export async function enqueueOrderNotification(
   db: Database,
   queues: Queues,
-  cfg: { shopName: string; storefrontUrl: string },
+  cfg: { shopName: string; storefrontUrl: string; adminUrl?: string; adminPhone?: string | (() => Promise<string | undefined>) },
   event: NotificationEvent,
   orderId: string,
   extra: Record<string, unknown> = {},
@@ -74,9 +79,32 @@ export async function enqueueOrderNotification(
     },
   };
   await queues.notifications.add(event, job, { jobId: `${event}-${orderId}-${extra.amount ?? ""}-${event === "payment_failed" ? Date.now() : ""}` });
+
+  const adminPhone = typeof cfg.adminPhone === "function" ? await cfg.adminPhone() : cfg.adminPhone;
+  if (adminPhone && ["order_received", "payment_failed", "cancelled"].includes(event)) {
+    const failed = event === "payment_failed" || (event === "cancelled" && String(extra.reason ?? "").toLowerCase().includes("payment"));
+    const heading = failed ? "⚠️ Order needs attention" : event === "cancelled" ? "Order cancelled" : "🛍️ New order";
+    const detail = [
+      `${heading}: *${order.orderNumber}*`,
+      `${order.customerName} · ${prettyUgPhone(order.phone)}`,
+      `${items.reduce((sum, item) => sum + item.quantity, 0)} item(s) · UGX ${order.total.toLocaleString("en-UG")}`,
+      `${order.area}, ${order.district}`,
+      extra.reason ? `Reason: ${String(extra.reason)}` : null,
+      cfg.adminUrl ? `${cfg.adminUrl.replace(/\/$/, "")}/orders/${order.id}` : null,
+    ].filter(Boolean).join("\n");
+    const adminJob: AdminWhatsAppJob = {
+      kind: "admin",
+      alertKind: failed ? "failed_order" : event === "order_received" ? "new_order" : "system",
+      to: adminPhone,
+      body: detail,
+      idempotencyKey: `ugmall:${event}:${order.id}:${String(extra.amount ?? "")}:${String(extra.reason ?? "")}`,
+      orderId: order.id,
+    };
+    await queues.notifications.add(`admin-${event}`, adminJob, { jobId: `admin-${event}-${order.id}-${event === "payment_failed" ? Date.now() : ""}` });
+  }
 }
 
-export function createOrderEffects(db: Database, queues: Queues, cfg: { shopName: string; storefrontUrl: string }): OrderEffects {
+export function createOrderEffects(db: Database, queues: Queues, cfg: { shopName: string; storefrontUrl: string; adminUrl?: string; adminPhone?: string | (() => Promise<string | undefined>) }): OrderEffects {
   return {
     notify: (event, orderId, extra) => enqueueOrderNotification(db, queues, cfg, event, orderId, extra).catch((e) => console.error("notify failed", e)),
     schedulePaymentCheck: async (paymentId, delayMs) => {

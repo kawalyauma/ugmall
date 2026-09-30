@@ -1,13 +1,16 @@
 import { Worker, type Job } from "bullmq";
 import { and, eq, lt, sql } from "drizzle-orm";
-import { orders, payments } from "@ugmall/database";
-import { createWhatsAppFromEnv, NotificationService, type NotificationJob } from "@ugmall/notifications";
+import { agentActions, orders, payments } from "@ugmall/database";
+import { AdminWhatsAppService, NotificationService, type AdminWhatsAppJob, type NotificationJob, type WhatsAppCareJob } from "@ugmall/notifications";
 import { createContainer } from "./container";
 import { logger } from "./lib/logger";
 import { QUEUE_NAMES } from "./queues";
 import { importProductImages } from "./lib/product-import";
 import type { ImageJob } from "@ugmall/importer";
 import { processAgentRun } from "./lib/agent-workforce";
+import { WhatsAppCareAgent } from "./lib/whatsapp-care-agent";
+import { ConfiguredWhatsAppProvider } from "./lib/whatsapp-provider";
+import { getWhatsAppRuntimeSettings } from "./lib/settings";
 
 /**
  * Background worker (separate process/container from the API):
@@ -19,18 +22,53 @@ import { processAgentRun } from "./lib/agent-workforce";
 const container = createContainer();
 const { db, orders: orderService, queues, storage, env } = container;
 const connection = container.queueRedis;
-const notifier = new NotificationService(db, createWhatsAppFromEnv(), {
-  useTemplates: env.WHATSAPP_USE_TEMPLATES,
-  templateLanguage: env.WHATSAPP_TEMPLATE_LANGUAGE,
+const whatsapp = new ConfiguredWhatsAppProvider(db, env);
+const notifier = new NotificationService(db, whatsapp, {
+  useTemplates: async () => (await getWhatsAppRuntimeSettings(db, env.APP_SECRET, env)).useTemplates,
+  templateLanguage: async () => (await getWhatsAppRuntimeSettings(db, env.APP_SECRET, env)).templateLanguage,
 });
+const adminNotifier = new AdminWhatsAppService(whatsapp);
+const careAgent = new WhatsAppCareAgent(db, orderService, storage, whatsapp, {
+  getAdminPhone: async () => (await getWhatsAppRuntimeSettings(db, env.APP_SECRET, env)).adminNumber,
+  adminUrl: env.ADMIN_URL,
+  shopName: env.SHOP_NAME,
+});
+
+async function enqueueApprovalAlerts(runId?: string) {
+  const adminPhone = (await getWhatsAppRuntimeSettings(db, env.APP_SECRET, env)).adminNumber;
+  if (!adminPhone) return;
+  const where = runId
+    ? and(eq(agentActions.runId, runId), eq(agentActions.status, "awaiting_approval"))
+    : eq(agentActions.status, "awaiting_approval");
+  const pending = await db.select().from(agentActions).where(where).limit(100);
+  for (const action of pending) {
+    const alert: AdminWhatsAppJob = {
+      kind: "admin",
+      alertKind: "agent_approval",
+      to: adminPhone,
+      body: `🤖 *Agent approval needed*\n${action.title}\n\n${action.explanation}\nRisk: ${action.risk}\n\nApprove only if the proposed change is correct.`,
+      buttons: [
+        { id: `ug:approve:${action.id}`, title: "Approve" },
+        { id: `ug:reject:${action.id}`, title: "Reject" },
+      ],
+      idempotencyKey: `ugmall:agent-approval:${action.id}`,
+      actionId: action.id,
+    };
+    await queues.notifications.add("agent-approval", alert, { jobId: `agent-approval-${action.id}` });
+  }
+}
 
 // 15s, 30s, 1m, 2m, 3m, 5m, 5m... up to ~30 minutes of polling
 const POLL_DELAYS = [15, 30, 60, 120, 180, 300, 300, 300, 300, 300].map((s) => s * 1000);
 
 const workers = [
-  new Worker<NotificationJob>(
+  new Worker<NotificationJob | AdminWhatsAppJob>(
     QUEUE_NAMES.notifications,
     async (job) => {
+      if (job.data.kind === "admin") {
+        await adminNotifier.send(job.data);
+        return;
+      }
       const logId = await notifier.send(job.data, job.data.logId);
       // Keep the log id so retries update the same row instead of creating duplicates.
       if (!job.data.logId) await job.updateData({ ...job.data, logId });
@@ -55,7 +93,12 @@ const workers = [
 
   // Codex is intentionally single-concurrency: predictable cost/load and a
   // complete audit record matter more than throughput for business workers.
-  new Worker<{ runId: string }>(QUEUE_NAMES.agents, async (job) => processAgentRun(db, job.data.runId), { connection, concurrency: 1 }),
+  new Worker<{ runId: string }>(QUEUE_NAMES.agents, async (job) => {
+    await processAgentRun(db, job.data.runId);
+    await enqueueApprovalAlerts(job.data.runId);
+  }, { connection, concurrency: 1 }),
+
+  new Worker<WhatsAppCareJob>(QUEUE_NAMES.whatsappCare, async (job) => careAgent.handle(job.data.event), { connection, concurrency: 4 }),
 
   new Worker<{ orderId: string }>(QUEUE_NAMES.orders, async (job) => orderService.expireIfUnpaid(job.data.orderId), { connection, concurrency: 5 }),
 
@@ -100,6 +143,7 @@ for (const w of workers) {
 
 await queues.maintenance.upsertJobScheduler("sweep-unpaid", { every: 5 * 60_000 }, { name: "sweep-unpaid" });
 await queues.maintenance.upsertJobScheduler("clean-temp", { every: 6 * 3600_000 }, { name: "clean-temp" });
+await enqueueApprovalAlerts().catch((error) => logger.warn({ error }, "unable to enqueue existing agent approvals"));
 logger.info("worker started");
 
 const shutdown = async () => {

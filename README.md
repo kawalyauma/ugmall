@@ -149,10 +149,13 @@ Add more staff and riders in **Admin → Staff & roles**.
    verify the authoritative transaction status before an order is marked paid.
 
 ### 5. WhatsApp Business
-Set `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_APP_SECRET`,
-`WHATSAPP_VERIFY_TOKEN`, create the templates in [docs/whatsapp-templates.md](docs/whatsapp-templates.md)
-and register the webhook `https://<SHOP_DOMAIN>/api/webhooks/whatsapp`. Set the shop's WhatsApp
-number (for the *Order on WhatsApp* buttons) in **Admin → Settings**.
+UG Mall uses the standalone WhatsApp Support Hub as its preferred provider. Create a **UG Mall**
+application in the Hub, enter the Hub URL, application key, webhook secret, and admin number under
+**Admin → Settings → WhatsApp Support Hub** (or use `WHATSAPP_SUPPORT_HUB_URL`,
+`WHATSAPP_SUPPORT_APP_KEY`, `WHATSAPP_SUPPORT_WEBHOOK_SECRET`, and `WHATSAPP_ADMIN_NUMBER`), then register
+`https://<SHOP_DOMAIN>/api/webhooks/whatsapp-support` as the app webhook. See
+[docs/WHATSAPP_SUPPORT_AGENT.md](docs/WHATSAPP_SUPPORT_AGENT.md). Direct Meta Cloud API variables
+remain available only as a legacy fallback.
 
 ### 6. Backups — do not skip this
 ```bash

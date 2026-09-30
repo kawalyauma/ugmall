@@ -1,6 +1,6 @@
 # UG Mall agentic workforce
 
-UG Mall's first three AI workers use the Codex CLI authenticated with the server's ChatGPT account. They do not use or require a separate model API key.
+UG Mall's governed business workers use the Codex CLI authenticated with the server's ChatGPT account. They do not use or require a separate model API key. A fourth WhatsApp care agent also runs continuously from signed Support Hub events.
 
 ## Workers
 
@@ -24,6 +24,16 @@ UG Mall's first three AI workers use the Codex CLI authenticated with the server
 - A fixed coupon cannot exceed 15% of its minimum order value.
 - Every coupon has an expiry, a total-use cap and a per-customer cap.
 
+### WhatsApp Care Agent
+
+- Uses the standalone WhatsApp Support Hub for transport, routing, history and delivery state.
+- Helps customers track orders, cancel eligible orders and submit return requests.
+- Escalates unrecognized questions and issues to the support console and the administrator.
+- Sends the administrator new-order and failed-payment alerts.
+- Sends every governed employee proposal to WhatsApp with **Approve** and **Reject** buttons.
+- Accepts approval clicks only from the configured administrator number, which must also belong to an active staff account.
+- Can audit communications workload in **Admin → AI Workforce**; its manual Codex review is observational and cannot execute changes.
+
 ## Governance and audit lifecycle
 
 1. A staff member starts a worker run from **Admin → AI Workforce** and may add a short objective.
@@ -31,7 +41,7 @@ UG Mall's first three AI workers use the Codex CLI authenticated with the server
 3. Codex runs in an ephemeral, read-only sandbox with a stripped environment. The prompt contains business context but no database, payment, WhatsApp or server credentials.
 4. Codex returns structured proposals. Invalid or unsupported output is rejected.
 5. Every proposal enters `awaiting_approval`; Codex cannot write to the shop database.
-6. A staff member with `agents.approve` reviews the exact payload and chooses **Approve & execute** or **Reject**.
+6. A staff member with `agents.approve` reviews the exact payload and chooses **Approve & execute** or **Reject**, either in Admin or from the authenticated administrator WhatsApp number.
 7. The application revalidates business limits, executes the typed action and stores before/after snapshots, actor IDs and timestamps.
 
 The durable records are `agent_runs`, `agent_actions`, and the general `audit_log`. Idempotency keys prevent a proposal from being applied twice.

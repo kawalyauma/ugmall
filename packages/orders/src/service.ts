@@ -475,6 +475,7 @@ export class OrderService {
           .set({ status: "failed", failureReason: `Amount mismatch: expected ${payment.amount}, got ${result.amount}`, raw: (result.raw ?? null) as object | null })
           .where(eq(payments.id, payment.id));
         await this.addHistory(tx, order, order.status, { type: "payment" }, `⚠️ Underpayment received (UGX ${result.amount}). Needs review.`);
+        event = { e: "payment_failed", orderId: order.id, extra: { reason: `Underpayment received: expected UGX ${payment.amount}, got UGX ${result.amount}` } };
         return;
       }
 

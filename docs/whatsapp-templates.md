@@ -19,7 +19,15 @@ are in `packages/notifications/src/messages.ts`.
 | `login_code` (Authentication) | {{1}} is your verification code. |
 
 ## Webhook
-Configure the webhook in the Meta app dashboard:
+
+With the preferred Support Hub provider, register the templates in the Hub and configure the **UG Mall application webhook** as:
+
+- URL: `https://<SHOP_DOMAIN>/api/webhooks/whatsapp-support`
+- Secret: the value of `WHATSAPP_SUPPORT_WEBHOOK_SECRET`
+
+The Hub owns the Meta webhook and forwards signed app-scoped events to UG Mall.
+
+For the legacy direct Meta fallback, configure the Meta app dashboard with:
 
 - Callback URL: `https://<SHOP_DOMAIN>/api/webhooks/whatsapp`
 - Verify token: the value of `WHATSAPP_VERIFY_TOKEN`

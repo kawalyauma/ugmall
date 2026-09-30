@@ -4,6 +4,7 @@ import { buildMessage, type NotificationEvent, type OrderMessageContext } from "
 import type { WhatsAppProvider } from "./whatsapp";
 
 export interface NotificationJob {
+  kind?: "customer";
   event: NotificationEvent;
   to: string; // 2567XXXXXXXX
   orderId?: string;
@@ -20,7 +21,10 @@ export class NotificationService {
   constructor(
     private db: Database,
     private whatsapp: WhatsAppProvider,
-    private opts: { useTemplates: boolean; templateLanguage: string },
+    private opts: {
+      useTemplates: boolean | (() => boolean | Promise<boolean>);
+      templateLanguage: string | (() => string | Promise<string>);
+    },
   ) {}
 
   async send(job: NotificationJob, logId?: string): Promise<string> {
@@ -34,8 +38,10 @@ export class NotificationService {
       id = row!.id;
     }
     try {
-      const res = this.opts.useTemplates
-        ? await this.whatsapp.sendTemplate(job.to, { name: msg.template, language: this.opts.templateLanguage, bodyParams: msg.params })
+      const useTemplates = typeof this.opts.useTemplates === "function" ? await this.opts.useTemplates() : this.opts.useTemplates;
+      const templateLanguage = typeof this.opts.templateLanguage === "function" ? await this.opts.templateLanguage() : this.opts.templateLanguage;
+      const res = useTemplates
+        ? await this.whatsapp.sendTemplate(job.to, { name: msg.template, language: templateLanguage, bodyParams: msg.params })
         : await this.whatsapp.sendText(job.to, msg.text);
       await this.db
         .update(notificationLog)

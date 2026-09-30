@@ -19,13 +19,16 @@ import {
   products,
   productVariants,
   promotions,
+  orders,
+  payments,
+  returns,
   type Database,
 } from "@ugmall/database";
 import type { StorageProvider } from "@ugmall/storage";
 import { slugify } from "@ugmall/shared";
 import { saveImage } from "./media";
 
-export const AGENT_KEYS = ["catalogue", "campaigns", "discounts"] as const;
+export const AGENT_KEYS = ["catalogue", "campaigns", "discounts", "whatsapp"] as const;
 export type AgentKey = (typeof AGENT_KEYS)[number];
 export const PROMPT_VERSION = "ugmall-workforce-v1";
 
@@ -85,9 +88,19 @@ const workerInstructions: Record<AgentKey, string> = {
   catalogue: "Audit product quality. Improve truthful titles, descriptions, tags and SEO; mark genuinely strong/in-stock products featured; request safe derived image variants when a product has only one usable image. Never invent specifications, brands, angles, colours or product features.",
   campaigns: "Create focused, time-boxed storefront campaigns from active, in-stock products. Campaign discounts must be 25% or less, last no more than 31 days, and have a clear commercial rationale.",
   discounts: "Create controlled coupon offers. Percentage discounts must be 15% or less. Fixed discounts must not exceed 15% of the minimum order. Every offer needs an expiry, total usage cap and per-customer cap.",
+  whatsapp: "Review customer-care, order, payment, return and communications workload. Identify unresolved or failed cases and recommend what staff should handle. This review is observational: return no executable actions. Live customer assistance is handled by the deterministic WhatsApp care runtime.",
 };
 
 export async function buildAgentContext(db: Database, agentKey: AgentKey) {
+  if (agentKey === "whatsapp") {
+    const [recentOrders, failedPayments, openReturns, pendingApprovals] = await Promise.all([
+      db.select().from(orders).orderBy(desc(orders.createdAt)).limit(50),
+      db.select().from(payments).where(eq(payments.status, "failed")).orderBy(desc(payments.createdAt)).limit(30),
+      db.select().from(returns).where(inArray(returns.status, ["requested", "approved", "received"])).orderBy(desc(returns.createdAt)).limit(30),
+      db.select().from(agentActions).where(eq(agentActions.status, "awaiting_approval")).orderBy(desc(agentActions.createdAt)).limit(30),
+    ]);
+    return { generatedAt: new Date().toISOString(), agentKey, recentOrders, failedPayments, openReturns, pendingApprovals };
+  }
   const catalogue = await db.execute(sql`
     select p.id, p.name, p.sku, left(p.description, 1200) as description, p.price, p.cost_price as "costPrice", p.sale_price as "salePrice",
       p.status, p.is_featured as "isFeatured", p.tags, p.rating_avg_x100 as "ratingX100", p.rating_count as "ratingCount",

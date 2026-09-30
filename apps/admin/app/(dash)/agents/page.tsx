@@ -1,13 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Bot, Check, ImagePlus, Megaphone, Play, RefreshCw, ShieldCheck, Sparkles, Tag, X } from "lucide-react";
+import { Bot, Check, ImagePlus, Megaphone, MessageCircle, Play, RefreshCw, ShieldCheck, Sparkles, Tag, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { useApi } from "@/lib/hooks";
 import { useToast } from "@/components/toast";
 import { Badge, Card, PageHeader, StatusBadge, dt } from "@/components/ui/kit";
 
-type WorkerKey = "catalogue" | "campaigns" | "discounts";
+type WorkerKey = "catalogue" | "campaigns" | "discounts" | "whatsapp";
 type Run = { id: string; agentKey: WorkerKey; status: string; objective: string | null; summary: string | null; error: string | null; promptVersion: string; inputHash: string; createdAt: string; completedAt: string | null };
 type Action = { id: string; runId: string; agentKey: WorkerKey; actionType: string; title: string; explanation: string; risk: "low" | "medium" | "high"; status: string; payload: Record<string, unknown>; beforeSnapshot: unknown; afterSnapshot: unknown; error: string | null; createdAt: string; executedAt: string | null };
 type Overview = { items: Run[]; actionCounts: Record<string, number>; workers: WorkerKey[] };
@@ -16,6 +16,7 @@ const workers: Record<WorkerKey, { title: string; role: string; icon: typeof Bot
   catalogue: { title: "Catalogue Manager", role: "Audits product quality, improves content, marks strong products trending and creates safe image formats.", icon: Sparkles, tone: "from-violet-600 to-indigo-700", examples: ["Quality & SEO", "Trending picks", "Image variants"] },
   campaigns: { title: "Campaign Manager", role: "Builds focused, time-boxed storefront campaigns from active products and real stock signals.", icon: Megaphone, tone: "from-rose-500 to-orange-600", examples: ["Campaign strategy", "Product selection", "Timed promotions"] },
   discounts: { title: "Discount Manager", role: "Designs controlled coupon offers with expiry, usage caps and strict discount guardrails.", icon: Tag, tone: "from-emerald-600 to-teal-700", examples: ["Coupon offers", "15% safety cap", "Usage limits"] },
+  whatsapp: { title: "WhatsApp Care Agent", role: "Handles customer support, order tracking and cancellations, return requests, escalations and admin communications.", icon: MessageCircle, tone: "from-green-500 to-emerald-700", examples: ["Customer care", "Orders & returns", "Approval alerts"] },
 };
 
 const pretty = (value: unknown) => JSON.stringify(value, null, 2);
@@ -24,7 +25,7 @@ export default function AgentsPage() {
   const toast = useToast();
   const overview = useApi<Overview>("/admin/agents?limit=80");
   const actions = useApi<{ items: Action[] }>("/admin/agents/actions");
-  const [objectives, setObjectives] = useState<Record<WorkerKey, string>>({ catalogue: "", campaigns: "", discounts: "" });
+  const [objectives, setObjectives] = useState<Record<WorkerKey, string>>({ catalogue: "", campaigns: "", discounts: "", whatsapp: "" });
   const [busy, setBusy] = useState<string | null>(null);
   const [tab, setTab] = useState<"approvals" | "history">("approvals");
   const pending = useMemo(() => (actions.data?.items ?? []).filter((a) => a.status === "awaiting_approval"), [actions.data]);
@@ -59,11 +60,11 @@ export default function AgentsPage() {
       <div className="overflow-hidden rounded-2xl bg-slate-950 p-5 text-white shadow-xl">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3"><div className="rounded-2xl bg-white/10 p-3"><ShieldCheck className="size-7 text-emerald-300" /></div><div><div className="text-lg font-bold">Governed autonomy</div><div className="text-sm text-slate-300">Codex proposes. UG Mall validates. You approve. The audit trail remembers.</div></div></div>
-          <div className="flex gap-5 text-center"><div><div className="text-2xl font-black">{pending.length}</div><div className="text-xs text-slate-400">Awaiting approval</div></div><div><div className="text-2xl font-black">{overview.data?.actionCounts.executed ?? 0}</div><div className="text-xs text-slate-400">Executed</div></div><div><div className="text-2xl font-black">3</div><div className="text-xs text-slate-400">Active roles</div></div></div>
+          <div className="flex gap-5 text-center"><div><div className="text-2xl font-black">{pending.length}</div><div className="text-xs text-slate-400">Awaiting approval</div></div><div><div className="text-2xl font-black">{overview.data?.actionCounts.executed ?? 0}</div><div className="text-xs text-slate-400">Executed</div></div><div><div className="text-2xl font-black">4</div><div className="text-xs text-slate-400">Active roles</div></div></div>
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-3">
+      <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-4">
         {(Object.keys(workers) as WorkerKey[]).map((key) => {
           const worker = workers[key]; const Icon = worker.icon;
           const latest = overview.data?.items.find((r) => r.agentKey === key);

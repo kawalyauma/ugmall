@@ -8,6 +8,7 @@ import type { Redis } from "ioredis";
 import { loadEnv, type Env } from "./env";
 import { createRedis } from "./lib/redis";
 import { createOrderEffects, createQueues, type Queues } from "./queues";
+import { getWhatsAppRuntimeSettings } from "./lib/settings";
 
 export interface Container {
   env: Env;
@@ -32,7 +33,12 @@ export function createContainer(env: Env = loadEnv()): Container {
   const payments = createPaymentRegistryFromEnv({ ...process.env, NODE_ENV: env.NODE_ENV, PAYMENT_CALLBACK_SECRET: env.PAYMENT_CALLBACK_SECRET });
   const reservations = new StockReservations(redis, (ids) => dbAvailability(db, ids), env.CHECKOUT_RESERVATION_MINUTES * 60);
   const queues = createQueues(queueRedis);
-  const orders = new OrderService(db, reservations, payments, createOrderEffects(db, queues, { shopName: env.SHOP_NAME, storefrontUrl: env.STOREFRONT_URL }), {
+  const orders = new OrderService(db, reservations, payments, createOrderEffects(db, queues, {
+    shopName: env.SHOP_NAME,
+    storefrontUrl: env.STOREFRONT_URL,
+    adminUrl: env.ADMIN_URL,
+    adminPhone: async () => (await getWhatsAppRuntimeSettings(db, env.APP_SECRET, env)).adminNumber,
+  }), {
     paymentTimeoutMinutes: env.PAYMENT_TIMEOUT_MINUTES,
     apiPublicUrl: env.API_PUBLIC_URL,
     storefrontUrl: env.STOREFRONT_URL,

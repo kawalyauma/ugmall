@@ -28,6 +28,12 @@ const schema = z.object({
   CHECKOUT_RESERVATION_MINUTES: z.coerce.number().default(10),
   WHATSAPP_VERIFY_TOKEN: z.string().optional(),
   WHATSAPP_APP_SECRET: z.string().optional(),
+  /** Standalone WhatsApp Support Hub application credentials. */
+  WHATSAPP_SUPPORT_HUB_URL: z.string().url().optional(),
+  WHATSAPP_SUPPORT_APP_KEY: z.string().min(16).optional(),
+  WHATSAPP_SUPPORT_WEBHOOK_SECRET: z.string().min(16).optional(),
+  /** E.164 without '+'. Only this number may approve agent actions in chat. */
+  WHATSAPP_ADMIN_NUMBER: z.string().regex(/^256\d{9}$/).optional(),
   WHATSAPP_USE_TEMPLATES: bool,
   WHATSAPP_TEMPLATE_LANGUAGE: z.string().default("en"),
   COOKIE_DOMAIN: z.string().optional(),
@@ -39,6 +45,11 @@ export type Env = z.infer<typeof schema>;
 
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   const env = schema.parse(source);
+  if (env.WHATSAPP_SUPPORT_HUB_URL || env.WHATSAPP_SUPPORT_APP_KEY || env.WHATSAPP_SUPPORT_WEBHOOK_SECRET) {
+    if (!env.WHATSAPP_SUPPORT_HUB_URL || !env.WHATSAPP_SUPPORT_APP_KEY || !env.WHATSAPP_SUPPORT_WEBHOOK_SECRET) {
+      throw new Error("WHATSAPP_SUPPORT_HUB_URL, WHATSAPP_SUPPORT_APP_KEY and WHATSAPP_SUPPORT_WEBHOOK_SECRET must be configured together");
+    }
+  }
   if (env.NODE_ENV === "production") {
     for (const k of ["APP_SECRET", "PAYMENT_CALLBACK_SECRET"] as const) {
       if (env[k].startsWith("dev-")) throw new Error(`${k} must be set to a strong random value in production`);

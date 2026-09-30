@@ -8,7 +8,7 @@ import { signedPrivateUrl } from "@ugmall/storage";
 import { ApiError, body, pagination } from "../../lib/http";
 import { audit } from "../../lib/audit";
 import { deleteMedia, readUpload, saveDocument, saveImage } from "../../lib/media";
-import { DEFAULT_SETTINGS, getSettings, saveSettings } from "../../lib/settings";
+import { DEFAULT_SETTINGS, getSettings, getWhatsAppSettingsStatus, saveSettings, saveWhatsAppSettings } from "../../lib/settings";
 import { requirePermission } from "../../middleware/auth";
 import type { AppEnv } from "../../types";
 
@@ -30,6 +30,30 @@ adminSystemRoutes.put("/settings", requirePermission(P.settingsManage), async (c
   await saveSettings(db, input);
   await audit(db, c.get("staff").id, "settings.update", "settings", undefined, input);
   return c.json(await getSettings(db));
+});
+
+adminSystemRoutes.get("/settings/whatsapp", requirePermission(P.settingsManage), async (c) => {
+  const { db, env } = c.get("container");
+  return c.json(await getWhatsAppSettingsStatus(db, env.APP_SECRET, env));
+});
+
+adminSystemRoutes.put("/settings/whatsapp", requirePermission(P.settingsManage), async (c) => {
+  const input = await body(c, z.object({
+    hubUrl: z.union([z.string().url(), z.literal("")]).optional(),
+    appKey: z.string().max(500).optional(),
+    webhookSecret: z.string().max(500).optional(),
+    adminNumber: z.union([z.string().regex(/^256\d{9}$/, "Admin number must look like 2567XXXXXXXX"), z.literal("")]).optional(),
+    useTemplates: z.boolean().optional(),
+    templateLanguage: z.string().trim().min(2).max(20).optional(),
+  }));
+  const { db, env } = c.get("container");
+  await saveWhatsAppSettings(db, env.APP_SECRET, input);
+  await audit(db, c.get("staff").id, "settings.whatsapp.update", "settings", undefined, {
+    fields: Object.keys(input),
+    appKeyUpdated: Boolean(input.appKey?.trim()),
+    webhookSecretUpdated: Boolean(input.webhookSecret?.trim()),
+  });
+  return c.json(await getWhatsAppSettingsStatus(db, env.APP_SECRET, env));
 });
 
 /** Generic upload into a storage area (e.g. receipts for expenses, supplier invoices). */
@@ -119,4 +143,3 @@ adminSystemRoutes.get("/system/queues", requirePermission(P.settingsManage), asy
   for (const [name, q] of Object.entries(queues)) out[name] = await q.getJobCounts("waiting", "active", "delayed", "failed", "completed");
   return c.json(out);
 });
-

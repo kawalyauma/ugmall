@@ -2,8 +2,9 @@ import { Hono } from "hono";
 import { eq } from "drizzle-orm";
 import { customers, paymentEvents, payments, refunds, whatsappMessages } from "@ugmall/database";
 import { PaymentError } from "@ugmall/payments";
-import { parseWhatsAppWebhook, verifyWhatsAppSignature } from "@ugmall/notifications";
+import { parseWhatsAppWebhook, verifySupportHubSignature, verifyWhatsAppSignature, type SupportHubWebhookEvent } from "@ugmall/notifications";
 import { logger } from "../lib/logger";
+import { getWhatsAppRuntimeSettings } from "../lib/settings";
 import type { AppEnv } from "../types";
 
 export const webhookRoutes = new Hono<AppEnv>();
@@ -70,6 +71,27 @@ webhookRoutes.on(["POST", "GET"], "/payments/:provider", async (c) => {
 });
 
 /* ------------------------------------------------------------- WhatsApp */
+
+/** App-scoped events from the standalone WhatsApp Support Hub. */
+webhookRoutes.post("/whatsapp-support", async (c) => {
+  const { env, queues, db } = c.get("container");
+  const raw = await c.req.text();
+  const whatsapp = await getWhatsAppRuntimeSettings(db, env.APP_SECRET, env);
+  if (!whatsapp.webhookSecret) return c.json({ ok: false, error: "WhatsApp Support Hub webhook is not configured" }, 503);
+  if (!verifySupportHubSignature(whatsapp.webhookSecret, raw, c.req.header("x-support-signature"))) {
+    return c.json({ ok: false }, 401);
+  }
+  let event: SupportHubWebhookEvent;
+  try {
+    event = JSON.parse(raw) as SupportHubWebhookEvent;
+  } catch {
+    return c.json({ ok: false }, 400);
+  }
+  if (!event?.event || !event.conversation?.id || !event.conversation?.phoneNumber) return c.json({ ok: false }, 422);
+  const dedupe = String(event.message?.id ?? `${event.event}-${event.conversation.id}-${event.timestamp ?? Date.now()}`).replace(/[^A-Za-z0-9_-]/g, "-");
+  await queues.whatsappCare.add("hub-event", { kind: "support_hub_event", event }, { jobId: `wa-care-${dedupe}` });
+  return c.json({ ok: true }, 202);
+});
 
 webhookRoutes.get("/whatsapp", (c) => {
   const { env } = c.get("container");
