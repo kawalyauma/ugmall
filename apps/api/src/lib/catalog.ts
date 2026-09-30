@@ -174,6 +174,52 @@ export function productCard(
   };
 }
 
+export async function productFeedItems(db: Database, limit = 5000) {
+  const promos = await activePromotions(db);
+  const rows = await db
+    .select({
+      p: products,
+      v: productVariants,
+      brandName: brands.name,
+      available: sql<number>`coalesce((select greatest(l.on_hand - l.reserved, 0) from ${inventoryLevels} l where l.variant_id = ${productVariants.id}), 0)::int`,
+    })
+    .from(productVariants)
+    .innerJoin(products, eq(products.id, productVariants.productId))
+    .leftJoin(brands, eq(brands.id, products.brandId))
+    .where(and(eq(products.status, "active"), eq(productVariants.isActive, true)))
+    .orderBy(desc(products.updatedAt), asc(productVariants.sortOrder), asc(productVariants.createdAt))
+    .limit(limit);
+
+  const images = await imagesFor(db, [...new Set(rows.map((r) => r.p.id))]);
+  return rows.map((r) => {
+    const pr = effectivePrice(r.p, r.v, promos);
+    const productImages = images.get(r.p.id) ?? [];
+    const image = productImages.find((i) => i.variantId === r.v.id) ?? productImages.find((i) => i.variantId === null) ?? productImages[0] ?? null;
+    const options = r.v.options ?? {};
+    const size = r.v.size ?? options.Size ?? options.size ?? null;
+    const colour = r.v.colour ?? options.Colour ?? options.Color ?? options.colour ?? options.color ?? null;
+    const optionLabel = [size ? `Size ${size}` : null, colour].filter(Boolean).join(" · ");
+    const plainDescription = r.p.seoDescription ?? (r.p.description ? htmlToText(r.p.description).slice(0, 500) : null);
+    return {
+      id: r.v.sku || r.v.id,
+      itemGroupId: r.p.sku || r.p.id,
+      productId: r.p.id,
+      title: optionLabel ? `${r.p.name} - ${optionLabel}` : r.p.name,
+      description: plainDescription ?? r.p.name,
+      slug: r.p.slug,
+      sku: r.v.sku,
+      barcode: r.v.barcode,
+      price: pr.price,
+      compareAt: pr.compareAt,
+      image,
+      brand: r.brandName ?? null,
+      available: r.available > 0,
+      size,
+      colour,
+    };
+  });
+}
+
 export async function productDetail(db: Database, reservations: StockReservations, slugOrId: string, opts: { includeInactive?: boolean } = {}) {
   const isUuid = /^[0-9a-f-]{36}$/i.test(slugOrId);
   const [row] = await db

@@ -84,7 +84,11 @@ export async function Listing({ basePath, fixed, searchParams, title, subtitle }
   }
   const page = Math.max(1, Number(sp.page ?? 1));
   const query = new URLSearchParams({ ...fixed, limit: "24", page: String(page) });
-  for (const [k, v] of Object.entries(sp)) if (v && k !== "page") query.set(k, v);
+  for (const [k, v] of Object.entries(sp)) {
+    if (!v || k === "page") continue;
+    if (k === "category" && fixed.category) continue;
+    query.set(k, v);
+  }
 
   const [data, brands, categories] = await Promise.all([
     serverGet<{ items: ProductCard[]; total: number }>(`/store/products?${query}`, { revalidate: 20 }),
