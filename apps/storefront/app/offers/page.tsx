@@ -3,7 +3,7 @@ import { serverGet } from "@/lib/api";
 import { Listing, type SearchParams } from "@/components/listing";
 import { Countdown } from "@/components/countdown";
 
-export const metadata = { title: "Offers" };
+export const metadata = { title: "Offers", description: "Browse current offers and promotional prices.", alternates: { canonical: "/offers" } };
 
 interface Offer {
   id: string;

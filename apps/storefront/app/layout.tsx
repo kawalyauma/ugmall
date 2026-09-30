@@ -7,6 +7,7 @@ import { StoreProvider } from "@/components/providers";
 import { BottomNav, Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { Analytics } from "@/components/analytics";
+import { storefrontUrl } from "@/lib/seo";
 
 const body = Plus_Jakarta_Sans({ subsets: ["latin"], display: "swap", variable: "--font-body" });
 const heading = Outfit({ subsets: ["latin"], display: "swap", variable: "--font-heading" });
@@ -17,9 +18,9 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: { default: `${name} — ${s?.tagline ?? "Online shopping in Uganda"}`, template: `%s | ${name}` },
     description: s?.heroSubtitle,
-    metadataBase: new URL(process.env.STOREFRONT_URL ?? "http://localhost:3000"),
+    metadataBase: new URL(storefrontUrl()),
     applicationName: name,
-    robots: { index: true, follow: true },
+    robots: { index: true, follow: true, googleBot: { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1, "max-video-preview": -1 } },
     openGraph: { type: "website", siteName: name, locale: "en_UG", title: name, description: s?.heroSubtitle },
   };
 }
@@ -34,9 +35,35 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     serverGet<ShopSettings>("/store/settings", { revalidate: 60 }),
     serverGet<Category[]>("/store/categories", { revalidate: 60 }).catch(() => []),
   ]);
+  const base = storefrontUrl();
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "OnlineStore",
+        "@id": `${base}/#store`,
+        name: settings.shopName,
+        url: base,
+        description: settings.tagline,
+        email: settings.supportEmail || undefined,
+        telephone: settings.supportPhone || undefined,
+        address: settings.pickupAddress ? { "@type": "PostalAddress", streetAddress: settings.pickupAddress, addressCountry: "UG" } : undefined,
+        sameAs: [settings.socialFacebook, settings.socialInstagram, settings.socialTiktok].filter(Boolean),
+      },
+      {
+        "@type": "WebSite",
+        "@id": `${base}/#website`,
+        url: base,
+        name: settings.shopName,
+        publisher: { "@id": `${base}/#store` },
+        inLanguage: "en-UG",
+      },
+    ],
+  };
   return (
     <html lang="en-UG" className={`${body.variable} ${heading.variable}`}>
       <body>
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, "\\u003c") }} />
         <StoreProvider settings={settings}>
           <Header categories={categories} />
           <main className="pb-safe min-h-[60vh]">{children}</main>

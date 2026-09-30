@@ -3,7 +3,7 @@ import { ArrowRight, ChevronRight, FolderTree, Layers3 } from "lucide-react";
 import { serverGet } from "@/lib/api";
 import type { Category } from "@/lib/types";
 
-export const metadata = { title: "Categories" };
+export const metadata = { title: "Categories", description: "Browse every active shopping category and collection.", alternates: { canonical: "/categories" } };
 
 function CategoryChildren({ parentId, categories, depth = 0 }: { parentId: string; categories: Category[]; depth?: number }) {
   const children = categories.filter((category) => category.parentId === parentId);

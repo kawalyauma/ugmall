@@ -2,7 +2,7 @@ import { serverGet } from "@/lib/api";
 import type { ShopSettings, Zone } from "@/lib/types";
 import { formatUGX } from "@ugmall/shared";
 
-export const metadata = { title: "Delivery, payment & returns" };
+export const metadata = { title: "Delivery, payment & returns", description: "Delivery areas, payment methods, returns and customer support information.", alternates: { canonical: "/help" } };
 
 export default async function Help() {
   const [s, zones] = await Promise.all([serverGet<ShopSettings>("/store/settings"), serverGet<Zone[]>("/store/delivery-zones")]);

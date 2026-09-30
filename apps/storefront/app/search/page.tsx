@@ -2,7 +2,7 @@ import { Listing, type SearchParams } from "@/components/listing";
 import { SearchBox } from "@/components/search-box";
 import { serverGet } from "@/lib/api";
 
-export const metadata = { title: "Search" };
+export const metadata = { title: "Search", robots: { index: false, follow: true } };
 
 export default async function SearchPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const sp = await searchParams;

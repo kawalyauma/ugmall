@@ -13,7 +13,9 @@ async function getCategory(slug: string) {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const c = await getCategory((await params).slug);
-  return { title: c?.name ?? "Category", description: c?.description ?? undefined };
+  return c
+    ? { title: c.name, description: c.description ?? `Shop ${c.name} online in Uganda.`, alternates: { canonical: `/c/${c.slug}` } }
+    : { title: "Category not found", robots: { index: false, follow: false } };
 }
 
 export default async function CategoryPage({ params, searchParams }: Props) {

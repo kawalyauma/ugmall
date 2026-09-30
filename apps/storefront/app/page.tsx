@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, Crown, Flame, MessageCircle, ShieldCheck, Shirt, Smartphone, Sparkles, Tag, Truck, Wallet, Zap } from "lucide-react";
 import { formatUGX, whatsappLink } from "@ugmall/shared";
@@ -19,6 +20,7 @@ interface Offer {
 }
 
 export const revalidate = 30;
+export const metadata: Metadata = { alternates: { canonical: "/" } };
 
 function ProductSection({ icon: Icon, eyebrow, title, description, href, items, accent, tint }: {
   icon: typeof Shirt;

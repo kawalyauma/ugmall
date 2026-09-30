@@ -10,6 +10,7 @@ import { logger } from "./lib/logger";
 import { loadCustomer, requireStaff } from "./middleware/auth";
 import { csrfGuard, securityHeaders } from "./middleware/security";
 import { catalogRoutes } from "./routes/public/catalog";
+import { seoRoutes } from "./routes/public/seo";
 import { cartRoutes } from "./routes/public/cart";
 import { checkoutRoutes, trackingRoutes } from "./routes/public/checkout";
 import { accountRoutes } from "./routes/public/account";
@@ -82,6 +83,7 @@ export function createApp(container: Container) {
   // Storefront API
   app.use("/store/*", loadCustomer);
   app.route("/store", catalogRoutes);
+  app.route("/store/seo", seoRoutes);
   app.route("/store/cart", cartRoutes);
   app.route("/store/checkout", checkoutRoutes);
   app.route("/store/orders", trackingRoutes);

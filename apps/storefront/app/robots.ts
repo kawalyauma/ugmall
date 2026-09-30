@@ -1,9 +1,12 @@
 import type { MetadataRoute } from "next";
+import { storefrontUrl } from "@/lib/seo";
+
+export const dynamic = "force-dynamic";
 
 export default function robots(): MetadataRoute.Robots {
-  const base = (process.env.STOREFRONT_URL ?? "http://localhost:3000").replace(/\/$/, "");
+  const base = storefrontUrl();
   return {
-    rules: [{ userAgent: "*", allow: "/", disallow: ["/account", "/checkout", "/cart", "/orders"] }],
+    rules: [{ userAgent: "*", allow: "/", disallow: ["/account/", "/checkout", "/cart", "/orders/", "/track", "/search", "/api/"] }],
     sitemap: `${base}/sitemap.xml`,
     host: base,
   };

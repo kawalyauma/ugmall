@@ -22,7 +22,9 @@ async function getDeal(slug: string) {
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const deal = await getDeal((await params).slug);
-  return deal ? { title: deal.title, description: deal.subtitle ?? undefined } : { title: "Deal" };
+  return deal
+    ? { title: deal.title, description: deal.subtitle ?? undefined, alternates: { canonical: `/deals/${deal.slug}` }, openGraph: { title: deal.title, description: deal.subtitle ?? undefined, images: deal.image ? [deal.image] : undefined } }
+    : { title: "Deal not found", robots: { index: false, follow: false } };
 }
 
 export default async function DealPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<SearchParams> }) {
