@@ -12,6 +12,7 @@ export const QUEUE_NAMES = {
   orders: "order-expiry",
   maintenance: "maintenance",
   imports: "imports",
+  agents: "agent-workforce",
 } as const;
 
 export function createQueues(connection: ConnectionOptions) {
@@ -27,6 +28,10 @@ export function createQueues(connection: ConnectionOptions) {
     imports: new Queue<ImageJob>(QUEUE_NAMES.imports, {
       connection,
       defaultJobOptions: { ...defaultJobOptions, attempts: 4, backoff: { type: "exponential", delay: 60_000 } },
+    }),
+    agents: new Queue<{ runId: string }>(QUEUE_NAMES.agents, {
+      connection,
+      defaultJobOptions: { ...defaultJobOptions, attempts: 2, backoff: { type: "exponential", delay: 60_000 } },
     }),
   };
 }

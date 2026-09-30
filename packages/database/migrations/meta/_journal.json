@@ -36,6 +36,13 @@
       "when": 1790508036543,
       "tag": "0004_deals",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790776558023,
+      "tag": "0005_premium_proteus",
+      "breakpoints": true
     }
   ]
 }

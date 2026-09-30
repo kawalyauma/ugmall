@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
-  BarChart3, Bike, Boxes, ClipboardList, CreditCard, GalleryHorizontal, Gauge, LogOut, Megaphone, Menu, Package, Settings, Star, Tag, Truck, Undo2, UserCog, Users, Warehouse, Wallet, X,
+  BarChart3, Bike, Bot, Boxes, ClipboardList, CreditCard, GalleryHorizontal, Gauge, LogOut, Megaphone, Menu, Package, Settings, Star, Tag, Truck, Undo2, UserCog, Users, Warehouse, Wallet, X,
 } from "lucide-react";
 import { PERMISSIONS as P, type Permission } from "@ugmall/shared";
 import { SessionGate, useSession } from "@/components/session";
@@ -42,6 +42,10 @@ const NAV: { group: string; items: { href: string; label: string; icon: typeof G
       { href: "/promotions", label: "Promotions & coupons", icon: Megaphone, perm: P.promotionsManage },
       { href: "/deals", label: "Deals slider", icon: GalleryHorizontal, perm: P.promotionsManage },
     ],
+  },
+  {
+    group: "AI Workforce",
+    items: [{ href: "/agents", label: "Workers & approvals", icon: Bot, perm: P.agentsView }],
   },
   {
     group: "Business",

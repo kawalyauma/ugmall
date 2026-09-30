@@ -7,6 +7,7 @@ import { logger } from "./lib/logger";
 import { QUEUE_NAMES } from "./queues";
 import { importProductImages } from "./lib/product-import";
 import type { ImageJob } from "@ugmall/importer";
+import { processAgentRun } from "./lib/agent-workforce";
 
 /**
  * Background worker (separate process/container from the API):
@@ -51,6 +52,10 @@ const workers = [
 
   // Product images from imported sheets are downloaded onto this server.
   new Worker<ImageJob>(QUEUE_NAMES.imports, async (job) => importProductImages(db, storage, job.data), { connection, concurrency: 3 }),
+
+  // Codex is intentionally single-concurrency: predictable cost/load and a
+  // complete audit record matter more than throughput for business workers.
+  new Worker<{ runId: string }>(QUEUE_NAMES.agents, async (job) => processAgentRun(db, job.data.runId), { connection, concurrency: 1 }),
 
   new Worker<{ orderId: string }>(QUEUE_NAMES.orders, async (job) => orderService.expireIfUnpaid(job.data.orderId), { connection, concurrency: 5 }),
 

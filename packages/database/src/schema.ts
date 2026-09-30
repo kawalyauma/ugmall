@@ -96,6 +96,59 @@ export const auditLog = pgTable(
   (t) => [index("audit_log_entity_idx").on(t.entityType, t.entityId), index("audit_log_created_idx").on(t.createdAt)],
 );
 
+/* --------------------------------------------------------- agentic workforce */
+
+/** One immutable record per Codex analysis run. The application, never Codex,
+ * owns execution and authorization. */
+export const agentRuns = pgTable(
+  "agent_runs",
+  {
+    id: id(),
+    agentKey: text("agent_key").notNull(),
+    trigger: text("trigger").notNull().default("manual"),
+    status: text("status").notNull().default("queued"),
+    objective: text("objective"),
+    promptVersion: text("prompt_version").notNull(),
+    inputHash: text("input_hash").notNull(),
+    inputSnapshot: jsonb("input_snapshot").notNull(),
+    outputSnapshot: jsonb("output_snapshot"),
+    summary: text("summary"),
+    error: text("error"),
+    requestedBy: uuid("requested_by").references(() => staffUsers.id, { onDelete: "set null" }),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("agent_runs_key_created_idx").on(t.agentKey, t.createdAt), index("agent_runs_status_idx").on(t.status)],
+);
+
+/** Governed action proposed by a worker. Before/after snapshots form the
+ * durable business audit trail and idempotency prevents duplicate execution. */
+export const agentActions = pgTable(
+  "agent_actions",
+  {
+    id: id(),
+    runId: uuid("run_id").notNull().references(() => agentRuns.id, { onDelete: "cascade" }),
+    agentKey: text("agent_key").notNull(),
+    actionType: text("action_type").notNull(),
+    title: text("title").notNull(),
+    explanation: text("explanation").notNull(),
+    risk: text("risk").notNull().default("medium"),
+    status: text("status").notNull().default("awaiting_approval"),
+    payload: jsonb("payload").notNull(),
+    beforeSnapshot: jsonb("before_snapshot"),
+    afterSnapshot: jsonb("after_snapshot"),
+    idempotencyKey: text("idempotency_key").notNull().unique(),
+    approvedBy: uuid("approved_by").references(() => staffUsers.id, { onDelete: "set null" }),
+    executedBy: uuid("executed_by").references(() => staffUsers.id, { onDelete: "set null" }),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    executedAt: timestamp("executed_at", { withTimezone: true }),
+    error: text("error"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("agent_actions_run_idx").on(t.runId), index("agent_actions_status_idx").on(t.status, t.createdAt)],
+);
+
 /* ------------------------------------------------------------------ media */
 
 /**

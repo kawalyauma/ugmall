@@ -26,6 +26,7 @@ import { adminMarketingRoutes } from "./routes/admin/marketing";
 import { adminReportRoutes } from "./routes/admin/reports";
 import { adminSystemRoutes } from "./routes/admin/system";
 import { adminImportRoutes } from "./routes/admin/imports";
+import { adminAgentRoutes } from "./routes/admin/agents";
 import type { AppEnv } from "./types";
 
 /**
@@ -92,7 +93,7 @@ export function createApp(container: Container) {
   // Admin API
   app.route("/admin/auth", adminAuthRoutes);
   app.use("/admin/*", async (c, next) => (c.req.path.startsWith("/admin/auth/") ? next() : requireStaff(c, next)));
-  for (const r of [adminCatalogRoutes, adminOrderRoutes, adminDeliveryRoutes, adminPeopleRoutes, adminMarketingRoutes, adminReportRoutes, adminSystemRoutes, adminImportRoutes]) {
+  for (const r of [adminCatalogRoutes, adminOrderRoutes, adminDeliveryRoutes, adminPeopleRoutes, adminMarketingRoutes, adminReportRoutes, adminSystemRoutes, adminImportRoutes, adminAgentRoutes]) {
     app.route("/admin", r);
   }
   app.route("/admin/inventory", adminInventoryRoutes);
