@@ -49,6 +49,8 @@ The background worker container mounts the host's Codex installation and login:
 
 - `CODEX_INSTALL_ROOT` defaults to `/usr/lib/node_modules/@openai/codex`.
 - `CODEX_HOME_HOST` defaults to `/home/ubuntu/.codex`.
+- The login directory is writable so Codex can refresh authentication and
+  ephemeral session metadata; Codex commands still run with `--sandbox read-only`.
 - Agent queue concurrency is one to keep server load and business changes predictable.
 
 Before deployment, verify the host login with `codex login status`. The expected result is `Logged in using ChatGPT`.

@@ -76,7 +76,9 @@ services:
       - ${SHOP_ROOT:-/opt/shop}/storage:/storage
       # Codex uses the server's ChatGPT login; no separate AI API key.
       - ${CODEX_INSTALL_ROOT:-/usr/lib/node_modules/@openai/codex}:/opt/codex:ro
-      - ${CODEX_HOME_HOST:-/home/ubuntu/.codex}:/home/node/.codex:ro
+      # Codex refreshes authentication/session metadata here; its execution
+      # sandbox remains read-only and receives no application credentials.
+      - ${CODEX_HOME_HOST:-/home/ubuntu/.codex}:/home/node/.codex
     healthcheck: { disable: true }
     depends_on:
       api: { condition: service_healthy }
