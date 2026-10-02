@@ -57,13 +57,6 @@
       "when": 1790977123556,
       "tag": "0007_conversational_brain",
       "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "7",
-      "when": 1790979000000,
-      "tag": "0008_guest_device_orders",
-      "breakpoints": true
     }
   ]
 }

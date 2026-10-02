@@ -569,8 +569,6 @@ export const orders = pgTable(
     orderNumber: text("order_number").notNull().unique(),
     /** Unguessable token for guest order tracking links. */
     trackingToken: text("tracking_token").notNull().unique(),
-    /** Anonymous browser identity used to keep guest order history on-device. */
-    deviceId: text("device_id"),
     customerId: uuid("customer_id").references(() => customers.id),
     customerName: text("customer_name").notNull(),
     phone: text("phone").notNull(),
@@ -618,7 +616,6 @@ export const orders = pgTable(
     index("orders_status_idx").on(t.status),
     index("orders_created_idx").on(t.createdAt),
     index("orders_customer_idx").on(t.customerId),
-    index("orders_device_idx").on(t.deviceId),
     index("orders_phone_idx").on(t.phone),
     index("orders_rider_idx").on(t.riderId),
   ],
