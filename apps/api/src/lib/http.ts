@@ -43,7 +43,8 @@ export const COOKIES = {
   device: "ugm_device",
 } as const;
 
-const DEVICE_TTL = 60 * 60 * 24 * 365 * 2;
+// Browsers cap persistent cookies at 400 days.
+const DEVICE_TTL = 60 * 60 * 24 * 400;
 
 /** Stable, anonymous browser identity. It is an unguessable HttpOnly cookie,
  * so guest orders can remain available on this device without an account. */
