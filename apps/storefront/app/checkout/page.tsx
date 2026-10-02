@@ -180,11 +180,12 @@ export default function CheckoutPage() {
           notes,
         },
       });
-      await refreshCart();
       if (r.paymentRedirectUrl) {
         setCardPayment({ url: r.paymentRedirectUrl, orderUrl: `/orders/${r.orderNumber}?t=${encodeURIComponent(r.trackingToken)}&new=1` });
+        void refreshCart();
         return;
       }
+      await refreshCart();
       router.push(`/orders/${r.orderNumber}?t=${r.trackingToken}&new=1`);
     } catch (e) {
       toast((e as Error).message);
@@ -194,7 +195,7 @@ export default function CheckoutPage() {
     }
   }
 
-  if (!cart.count) {
+  if (!cart.count && !cardPayment) {
     return (
       <div className="container-page py-16 text-center">
         <p>Your cart is empty.</p>

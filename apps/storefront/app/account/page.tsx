@@ -18,6 +18,23 @@ interface OrdersResponse { summary:{ totalOrders:number; openOrders:number; deli
 interface CampaignProduct { id:string; name:string; slug:string; price:number; image:{ thumb:string | null; url:string | null } | null }
 interface PersonalCampaign { id:string; title:string; code:string; percentOff:number; maxDiscount:number | null; startsAt:string; endsAt:string; used:boolean; products:CampaignProduct[] }
 
+function GuestDashboard({data}:{data:OrdersResponse|null}) {
+  const orders=data?.orders??[];
+  return <div className="container-page space-y-6 py-5">
+    <section className="rounded-3xl bg-gradient-to-r from-brand-800 to-emerald-600 p-5 text-white shadow-lg">
+      <div className="flex items-center gap-3"><span className="grid size-11 place-items-center rounded-2xl bg-white/15"><PackageOpen className="size-6"/></span><div><h1 className="text-xl font-black">Your orders on this browser</h1><p className="text-sm text-white/80">No account required. UG Mall remembers this device securely.</p></div></div>
+    </section>
+    <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+      <section><div className="mb-3"><h2 className="text-lg font-bold">Order history</h2><p className="text-xs text-gray-500">Orders made from this browser appear here automatically.</p></div>
+        {!data&&<div className="rounded-2xl border border-gray-200 bg-white p-8 text-center text-gray-400">Loading this device…</div>}
+        {data&&orders.length===0&&<div className="rounded-2xl border border-dashed border-gray-300 bg-white p-8 text-center"><ReceiptText className="mx-auto mb-2 size-8 text-gray-300"/><p className="text-sm text-gray-600">No orders have been made on this browser yet.</p><Link href="/" className="mt-3 inline-block text-sm font-bold text-brand-700">Start shopping</Link></div>}
+        <div className="space-y-3">{orders.map((o)=><Link key={o.orderNumber} href={`/orders/${o.orderNumber}`} className="group flex items-center gap-3 rounded-2xl border border-gray-200 bg-white p-3 hover:border-brand-300 hover:shadow-sm"><div className="size-16 shrink-0 overflow-hidden rounded-xl bg-gray-100">{o.firstImage&&<img src={o.firstImage} alt="" className="size-full object-cover"/>}</div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className="font-bold">{o.orderNumber}</span><span className="rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-bold text-brand-700">{o.statusLabel}</span></div><div className="mt-1 text-xs text-gray-500">{new Date(o.createdAt).toLocaleDateString("en-UG")} · {o.itemCount} item(s)</div><div className="mt-1 text-sm font-black">{formatUGX(o.total)}</div></div><ChevronRight className="size-5 text-gray-300"/></Link>)}</div>
+      </section>
+      <aside className="rounded-2xl border border-gray-200 bg-white px-5"><Login/></aside>
+    </div>
+  </div>;
+}
+
 function Login() {
   const { refreshCustomer, toast } = useStore();
   const router = useRouter();
@@ -63,6 +80,7 @@ export default function AccountPage() {
   const [buyer,setBuyer]=useState<Buyer|null>(null);
   const [orders,setOrders]=useState<OrdersResponse|null>(null);
   const [campaign,setCampaign]=useState<PersonalCampaign|null>(null);
+  const [guestOrders,setGuestOrders]=useState<OrdersResponse|null>(null);
   const [now,setNow]=useState(Date.now());
   const [filter,setFilter]=useState<"all"|"active"|"delivered"|"cancelled">("all");
   const [profile,setProfile]=useState({name:"",altPhone:"",email:""});
@@ -74,13 +92,16 @@ export default function AccountPage() {
     setBuyer(me); setProfile({name:me.name,altPhone:me.altPhone?`0${me.altPhone.slice(3)}`:"",email:me.email??""});
     setOrders((old)=>append&&old?{...orderData,orders:[...old.orders,...orderData.orders]}:orderData); setCampaign(offer);
   }
-  useEffect(()=>{void load();},[customer]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(()=>{
+    if(customer) void load();
+    else if(customer===null) api<OrdersResponse>("/store/account/device-orders").then(setGuestOrders,()=>setGuestOrders({summary:{totalOrders:0,openOrders:0,deliveredOrders:0,totalSpent:0},pagination:{total:0,limit:20,offset:0},orders:[]}));
+  },[customer]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(()=>{const id=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(id);},[]);
   const visible=useMemo(()=>orders?.orders.filter((o)=>filter==="all"||(filter==="active"?!["delivered","cancelled","returned","refunded"].includes(o.status):o.status===filter))??[],[orders,filter]);
   async function saveProfile(){setSaving(true);try{await api("/store/account/profile",{method:"PATCH",body:profile});await refreshCustomer();await load();toast("Your details were saved");}catch(e){toast((e as Error).message);}finally{setSaving(false);}}
 
   if(customer===undefined)return <div className="py-16 text-center text-gray-400">Loading…</div>;
-  if(!customer)return <div className="container-page"><Login/></div>;
+  if(!customer)return <GuestDashboard data={guestOrders}/>;
   const s=orders?.summary;
   return <div className="container-page space-y-6 py-5">
     <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm font-medium text-brand-700">Buyer dashboard</p><h1 className="text-2xl font-black">Hi, {customer.name.split(" ")[0]}</h1><p className="text-sm text-gray-500">Everything you buy stays here.</p></div><Button variant="secondary" size="sm" onClick={async()=>{await api("/store/account/logout",{method:"POST"});await refreshCustomer();}}>Sign out</Button></div>

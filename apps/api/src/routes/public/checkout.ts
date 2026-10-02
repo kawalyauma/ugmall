@@ -7,7 +7,7 @@ import { CartError, OrderError } from "@ugmall/orders";
 import { DeliveryError } from "@ugmall/delivery";
 import { PaymentError } from "@ugmall/payments";
 import { checkoutSchema, ORDERABLE_DELIVERY_METHODS, normalizeUgPhone, ORDER_STATUS_LABELS, prettyUgPhone, ugPhone } from "@ugmall/shared";
-import { ApiError, body, clientIp } from "../../lib/http";
+import { ApiError, body, clientIp, getDeviceId } from "../../lib/http";
 import { limit } from "../../middleware/security";
 import type { AppEnv } from "../../types";
 import { clearCart, getCartId, readCartLines } from "./cart";
@@ -90,7 +90,7 @@ checkoutRoutes.post(
     try {
       const result = await c.get("container").orders.placeOrder(
         { ...input, items: input.items?.length ? input.items : cartLines },
-        { source: "web", customerId: c.get("customer")?.id ?? null },
+        { source: "web", customerId: c.get("customer")?.id ?? null, deviceId: getDeviceId(c, true) },
       );
       await clearCart(c);
       return c.json({
@@ -118,7 +118,8 @@ async function findTrackedOrder(c: Context<AppEnv>, orderNumber: string, token: 
   const { db } = c.get("container");
   const [order] = await db.select().from(orders).where(eq(orders.orderNumber, orderNumber));
   const customer = c.get("customer");
-  if (!order || (order.trackingToken !== token && order.customerId !== customer?.id)) throw new ApiError(404, "Order not found");
+  const deviceId = getDeviceId(c, false);
+  if (!order || (order.trackingToken !== token && order.customerId !== customer?.id && order.deviceId !== deviceId)) throw new ApiError(404, "Order not found");
   return order;
 }
 

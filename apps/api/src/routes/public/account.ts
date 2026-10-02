@@ -4,7 +4,7 @@ import { z } from "zod";
 import { and, count, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import { coupons, customerAddresses, customerCampaigns, customers, orderItems, orders, products, reviews, wishlistItems } from "@ugmall/database";
 import { normalizeUgPhone, ORDER_STATUS_LABELS, reviewSchema, ugPhone } from "@ugmall/shared";
-import { ApiError, body, clearCookie, COOKIES, writeCookie, clientIp } from "../../lib/http";
+import { ApiError, body, clearCookie, COOKIES, writeCookie, clientIp, getDeviceId } from "../../lib/http";
 import { listProducts } from "../../lib/catalog";
 import { readUpload, saveImage } from "../../lib/media";
 import { requireCustomer } from "../../middleware/auth";
@@ -100,6 +100,38 @@ accountRoutes.delete("/addresses/:id", async (c) => {
   const { db } = c.get("container");
   await db.delete(customerAddresses).where(and(eq(customerAddresses.id, c.req.param("id")), eq(customerAddresses.customerId, c.get("customer")!.id)));
   return c.json({ ok: true });
+});
+
+/** Account-free order history tied to this anonymous browser. */
+accountRoutes.get("/device-orders", async (c) => {
+  const { db } = c.get("container");
+  const deviceId = getDeviceId(c, true)!;
+  const query = z.object({ limit:z.coerce.number().int().min(1).max(100).default(20), offset:z.coerce.number().int().min(0).default(0) }).parse(c.req.query());
+  const where = eq(orders.deviceId, deviceId);
+  const [rows, totalRows, summaryRows] = await Promise.all([
+    db.select().from(orders).where(where).orderBy(desc(orders.createdAt)).limit(query.limit).offset(query.offset),
+    db.select({ total:count() }).from(orders).where(where),
+    db.select({
+      totalOrders:count(),
+      openOrders:sql<number>`count(*) filter (where ${orders.status} not in ('delivered','cancelled','returned','refunded'))::int`,
+      deliveredOrders:sql<number>`count(*) filter (where ${orders.status}='delivered')::int`,
+      totalSpent:sql<number>`coalesce(sum(case when ${orders.status} not in ('cancelled','refunded') then ${orders.total} else 0 end),0)::int`,
+    }).from(orders).where(where),
+  ]);
+  const items = rows.length ? await db.select().from(orderItems).where(inArray(orderItems.orderId, rows.map((r) => r.id))) : [];
+  const summary = summaryRows[0];
+  return c.json({
+    secured:false,
+    summary:{ totalOrders:summary?.totalOrders ?? 0, openOrders:summary?.openOrders ?? 0, deliveredOrders:summary?.deliveredOrders ?? 0, totalSpent:summary?.totalSpent ?? 0 },
+    pagination:{ total:totalRows[0]?.total ?? 0, limit:query.limit, offset:query.offset },
+    orders:rows.map((o) => ({
+      orderNumber:o.orderNumber, status:o.status, statusLabel:ORDER_STATUS_LABELS[o.status], paymentStatus:o.paymentStatus,
+      paymentMethod:o.paymentMethod, deliveryMethod:o.deliveryMethod, total:o.total, amountPaid:o.amountPaid,
+      createdAt:o.createdAt, updatedAt:o.updatedAt,
+      itemCount:items.filter((i) => i.orderId === o.id).reduce((sum, i) => sum + i.quantity, 0),
+      firstImage:items.find((i) => i.orderId === o.id)?.imageUrl ?? null,
+    })),
+  });
 });
 
 accountRoutes.get("/orders", requireCustomer, async (c) => {

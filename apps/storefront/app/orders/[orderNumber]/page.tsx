@@ -47,7 +47,7 @@ export default function OrderPage({ params }: { params: Promise<{ orderNumber: s
   const sp = useSearchParams();
   const t = sp.get("t") ?? "";
   const isNew = sp.get("new") === "1";
-  const { settings, toast } = useStore();
+  const { settings, toast, customer } = useStore();
   const [order, setOrder] = useState<Tracked | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retryPhone, setRetryPhone] = useState("");
@@ -148,6 +148,14 @@ export default function OrderPage({ params }: { params: Promise<{ orderNumber: s
         <div className="rounded-2xl bg-green-50 p-4 text-green-800">
           <div className="text-lg font-bold">Thank you, {order.customerName.split(" ")[0]}! 🎉</div>
           <p className="text-sm">Your order has been received. We'll confirm on WhatsApp shortly.</p>
+        </div>
+      )}
+
+      {isNew && !customer && (
+        <div className="rounded-2xl border border-brand-200 bg-brand-50 p-4 text-brand-900">
+          <div className="font-bold">This order is saved on this browser</div>
+          <p className="mt-1 text-sm">No account was needed. Secure it with your WhatsApp number only if you want to see it again on another phone or browser.</p>
+          <Link href={`/account?next=${encodeURIComponent(`/orders/${order.orderNumber}`)}`} className="mt-3 inline-flex rounded-xl bg-brand-700 px-4 py-2 text-sm font-bold text-white">Secure my orders with WhatsApp</Link>
         </div>
       )}
 

@@ -1,4 +1,5 @@
 import type { Context } from "hono";
+import { randomBytes } from "node:crypto";
 import { HTTPException } from "hono/http-exception";
 import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import type { z } from "zod";
@@ -39,7 +40,23 @@ export const COOKIES = {
   staff: "ugm_staff",
   customer: "ugm_session",
   cart: "ugm_cart",
+  device: "ugm_device",
 } as const;
+
+const DEVICE_TTL = 60 * 60 * 24 * 365 * 2;
+
+/** Stable, anonymous browser identity. It is an unguessable HttpOnly cookie,
+ * so guest orders can remain available on this device without an account. */
+export function getDeviceId(c: Context<AppEnv>, create = true): string | null {
+  let id = c.get("deviceId") ?? readCookie(c, COOKIES.device);
+  if (id && !/^[A-Za-z0-9_-]{24,64}$/.test(id)) id = undefined;
+  if (!id && create) {
+    id = randomBytes(24).toString("base64url");
+    writeCookie(c, COOKIES.device, id, DEVICE_TTL);
+  }
+  if (id) c.set("deviceId", id);
+  return id ?? null;
+}
 
 export function readCookie(c: Context, name: string) {
   return getCookie(c, name);

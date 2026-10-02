@@ -21,5 +21,6 @@ export type AppEnv = {
     customer: CustomerPrincipal | null;
     sessionToken: string;
     cartId?: string;
+    deviceId?: string;
   };
 };

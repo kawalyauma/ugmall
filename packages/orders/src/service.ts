@@ -187,7 +187,7 @@ export class OrderService {
    *     redeem coupon, write history, create the payment row
    *  3. drop the Redis hold, start the payment (MoMo prompt) and notify
    */
-  async placeOrder(input: CheckoutInput, ctx: { source: OrderSource; customerId?: string | null; staffId?: string | null }) {
+  async placeOrder(input: CheckoutInput, ctx: { source: OrderSource; customerId?: string | null; deviceId?: string | null; staffId?: string | null }) {
     const phone = normalizeUgPhone(input.phone)!;
     const altPhone = input.altPhone ? normalizeUgPhone(input.altPhone) : null;
     const paymentPhone = input.paymentPhone ? normalizeUgPhone(input.paymentPhone) : phone;
@@ -214,7 +214,7 @@ export class OrderService {
 
   private async placeReserved(
     input: CheckoutInput,
-    ctx: { source: OrderSource; customerId?: string | null; staffId?: string | null },
+    ctx: { source: OrderSource; customerId?: string | null; deviceId?: string | null; staffId?: string | null },
     reservation: NonNullable<Awaited<ReturnType<StockReservations["get"]>>>,
     p: { phone: string; altPhone: string | null; paymentPhone: string | null; provider: ReturnType<PaymentRegistry["forMethod"]> },
   ) {
@@ -298,6 +298,7 @@ export class OrderService {
         .values({
           orderNumber,
           trackingToken: randomBytes(18).toString("base64url"),
+          deviceId: ctx.deviceId ?? null,
           customerId: ctx.customerId ?? customer!.id,
           customerName: input.customerName,
           phone,
