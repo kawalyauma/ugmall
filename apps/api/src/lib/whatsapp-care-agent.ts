@@ -17,6 +17,7 @@ import { executeAgentAction } from "./agent-workforce";
 import { audit } from "./audit";
 import { listProducts } from "./catalog";
 import type { ShopSettings } from "./settings";
+import { WhatsAppAgentBrain } from "./whatsapp-agent-brain";
 
 const MENU_BUTTONS = [
   { id: "ug:shop", title: "Find products" },
@@ -117,6 +118,8 @@ Return only the requested JSON.`;
  * deterministic; natural shopping recommendations are written generatively.
  */
 export class WhatsAppCareAgent {
+  private brain: WhatsAppAgentBrain;
+
   constructor(
     private db: Database,
     private ordersService: OrderService,
@@ -129,7 +132,14 @@ export class WhatsAppCareAgent {
       storefrontUrl: string;
       shopName: string;
     },
-  ) {}
+  ) {
+    this.brain = new WhatsAppAgentBrain(db, ordersService, whatsapp, {
+      getAdminPhone: opts.getAdminPhone,
+      getShopSettings: opts.getShopSettings,
+      storefrontUrl: opts.storefrontUrl,
+      shopName: opts.shopName,
+    });
+  }
 
   async handle(event: SupportHubWebhookEvent) {
     const phone = normalizeUgPhone(event.conversation.phoneNumber);
@@ -138,7 +148,8 @@ export class WhatsAppCareAgent {
     const interactiveId = compact(event.message?.interactive?.id);
 
     const adminPhone = await this.opts.getAdminPhone();
-    if (adminPhone && phone === adminPhone && interactiveId.startsWith("ug:")) {
+    const isAdmin = !!adminPhone && phone === adminPhone;
+    if (isAdmin && interactiveId.startsWith("ug:")) {
       await this.handleAdminAction(adminPhone, interactiveId, messageKey);
       return;
     }
@@ -161,6 +172,11 @@ export class WhatsAppCareAgent {
     if (interactiveId.startsWith("ug:return:")) return this.requestReturn(phone, interactiveId.slice(10), messageKey, event.conversation.id);
 
     const text = compact(event.message?.content);
+    const admin = isAdmin ? await this.adminStaff(phone) : null;
+    if (isAdmin && !admin) return this.sendText(phone, "This WhatsApp number is configured for administration but is not linked to an active UG Mall staff account, so I cannot provide customer or admin data.", messageKey);
+    if (text && await this.brain.handle(event, admin ? { id: admin.id, name: admin.name } : null)) return;
+
+    // Deterministic fallback when the model runtime is temporarily unavailable.
     const lower = text.toLowerCase();
     const orderNumber = text.match(/UG-\d{4}-\d+/i)?.[0]?.toUpperCase();
     if (orderNumber) return this.showOneOrder(phone, orderNumber, messageKey);

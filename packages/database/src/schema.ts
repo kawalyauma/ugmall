@@ -149,6 +149,42 @@ export const agentActions = pgTable(
   (t) => [index("agent_actions_run_idx").on(t.runId), index("agent_actions_status_idx").on(t.status, t.createdAt)],
 );
 
+/** Durable memory owned by the commerce app. The Support Hub remains the
+ * transport/source transcript, while this table gives the assistant the
+ * context it needs to continue a conversation across worker restarts. */
+export const assistantConversations = pgTable(
+  "assistant_conversations",
+  {
+    id: id(),
+    externalConversationId: text("external_conversation_id").notNull().unique(),
+    phone: text("phone").notNull(),
+    displayName: text("display_name"),
+    actorType: text("actor_type").notNull().default("customer"), // customer | admin
+    status: text("status").notNull().default("open"), // open | escalated | resolved
+    summary: text("summary"),
+    memory: jsonb("memory").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+    lastMessageAt: timestamp("last_message_at", { withTimezone: true }).notNull().defaultNow(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("assistant_conversations_phone_idx").on(t.phone, t.lastMessageAt), index("assistant_conversations_status_idx").on(t.status, t.lastMessageAt)],
+);
+
+export const assistantMessages = pgTable(
+  "assistant_messages",
+  {
+    id: id(),
+    conversationId: uuid("conversation_id").notNull().references(() => assistantConversations.id, { onDelete: "cascade" }),
+    externalMessageId: text("external_message_id").unique(),
+    direction: text("direction").notNull(), // inbound | outbound | tool
+    content: text("content").notNull(),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("assistant_messages_conversation_idx").on(t.conversationId, t.createdAt)],
+);
+
 /* ------------------------------------------------------------------ media */
 
 /**
@@ -533,6 +569,8 @@ export const orders = pgTable(
     orderNumber: text("order_number").notNull().unique(),
     /** Unguessable token for guest order tracking links. */
     trackingToken: text("tracking_token").notNull().unique(),
+    /** Anonymous browser identity used to keep guest order history on-device. */
+    deviceId: text("device_id"),
     customerId: uuid("customer_id").references(() => customers.id),
     customerName: text("customer_name").notNull(),
     phone: text("phone").notNull(),
@@ -580,6 +618,7 @@ export const orders = pgTable(
     index("orders_status_idx").on(t.status),
     index("orders_created_idx").on(t.createdAt),
     index("orders_customer_idx").on(t.customerId),
+    index("orders_device_idx").on(t.deviceId),
     index("orders_phone_idx").on(t.phone),
     index("orders_rider_idx").on(t.riderId),
   ],
