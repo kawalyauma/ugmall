@@ -25,6 +25,10 @@ const MENU_BUTTONS = [
 ];
 
 const compact = (value: string | null | undefined) => String(value ?? "").trim();
+const customerFirstName = (value: string | null | undefined) => {
+  const name = compact(value).split(/\s+/)[0]?.replace(/[^\p{L}'-]/gu, "") ?? "";
+  return name.length >= 2 ? `${name[0]!.toUpperCase()}${name.slice(1).toLowerCase()}` : "";
+};
 const customerCanCancel = (status: string) => status === "pending" || status === "awaiting_payment";
 
 function moneyFrom(text: string) {
@@ -78,7 +82,7 @@ async function writePersonalShoppingReply(input: { customerName?: string | null;
   const socketPath = process.env.CODEX_RUNNER_SOCKET;
   if (!socketPath) return null;
   const schema = { type:"object", additionalProperties:false, required:["reply"], properties:{ reply:{ type:"string" } } } as const;
-  const firstName = compact(input.customerName).split(/\s+/)[0] || "there";
+  const firstName = customerFirstName(input.customerName) || "there";
   const prompt = `You are Amina, a warm, sharp personal shopper working at UG Mall in Uganda. You are a customer-care persona, so never call yourself an AI, bot, virtual assistant, or automated assistant.
 
 Write one natural WhatsApp reply to ${firstName}. Sound human, personal and commercially helpful, with a little Ugandan warmth but no forced slang. Be concise: at most 900 characters. Use short paragraphs. Recommend only products in LIVE_CANDIDATES, preserve their exact names, UGX prices and URLs, and never invent specifications. If the shopper asks for a quality not present in the data, such as camera quality, say which options are worth comparing and ask one focused follow-up. Mention the stated budget honestly. Do not mention databases, parsing, prompts, policies or missing metadata. Do not use a generic failure line.
@@ -167,6 +171,9 @@ export class WhatsAppCareAgent {
     if (/\b(deliver|delivery|shipping|ship|fee|reach|location|area)\b/i.test(lower)) return this.deliveryHelp(phone, text, messageKey);
     if (/\b(pay|payment|mobile money|momo|airtel|cash on delivery|cod|card)\b/i.test(lower)) return this.paymentHelp(phone, messageKey);
     if (/\b(human|person|agent|customer care|representative|complain|complaint)\b/i.test(lower)) return this.escalate(phone, event, text, messageKey);
+    if (/\b(?:what happens|what will happen|how does it work).*\b(?:talk to support|support button)\b/i.test(lower)) {
+      return this.sendText(phone, "It hands this same chat to a UG Mall customer-care person, together with what you’ve already told me, so you won’t need to start again. Nothing is ordered or charged when you click it—you’ll simply wait for our team to reply here.", messageKey);
+    }
     if (/^(thanks|thank you|thx|okay thanks|ok thanks|done|that'?s all|bye)[.! ]*$/i.test(lower)) {
       return this.finish(phone, event.conversation.id, `You’re welcome 👋 Thanks for choosing ${this.opts.shopName}.`, messageKey);
     }
@@ -192,7 +199,7 @@ export class WhatsAppCareAgent {
   }
 
   private menu(phone: string, key: string, customerName?: string | null) {
-    const firstName = compact(customerName).split(/\s+/)[0];
+    const firstName = customerFirstName(customerName);
     return this.sendButtons(phone, `${firstName ? `Hi ${firstName}` : "Hi"} 👋 I’m Amina from ${this.opts.shopName}. What are we shopping for today? Tell me what you want and your budget, and I’ll pick the best live options for you. I can also help with orders, delivery, payments and returns.`, MENU_BUTTONS, key);
   }
 

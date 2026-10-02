@@ -21,4 +21,8 @@ describe("WhatsApp shopping language", () => {
     expect(shoppingCategorySlugs(text)).toEqual(["smartphones"]);
     expect(focusedShoppingTerms(text)).toBe("");
   });
+
+  it("does not treat support questions as catalogue searches", () => {
+    expect(shoppingCategorySlugs("What happens if I click talk to support")).toBeUndefined();
+  });
 });
