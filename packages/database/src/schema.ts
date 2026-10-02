@@ -456,6 +456,10 @@ export const locations = pgTable(
 export const coupons = pgTable("coupons", {
   id: id(),
   code: text("code").notNull().unique(),
+  /** Set for a private buyer campaign; null means the coupon is public. */
+  customerId: uuid("customer_id").references(() => customers.id, { onDelete: "cascade" }),
+  /** Empty means any product; private campaigns use a tightly scoped product set. */
+  productIds: uuid("product_ids").array().notNull().default(sql`'{}'::uuid[]`),
   description: text("description"),
   type: couponTypeEnum("type").notNull(),
   value: integer("value").notNull().default(0), // percent (0-100) or UGX
@@ -469,6 +473,22 @@ export const coupons = pgTable("coupons", {
   isActive: boolean("is_active").notNull().default(true),
   createdAt: createdAt(),
 });
+
+export const customerCampaigns = pgTable(
+  "customer_campaigns",
+  {
+    id: id(),
+    customerId: uuid("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
+    couponId: uuid("coupon_id").notNull().references(() => coupons.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    productIds: uuid("product_ids").array().notNull().default(sql`'{}'::uuid[]`),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("customer_campaigns_customer_idx").on(t.customerId), index("customer_campaigns_ends_idx").on(t.endsAt)],
+);
 
 /** Time-boxed offers shown on the storefront ("Offers" page / home banners). */
 export const promotions = pgTable("promotions", {

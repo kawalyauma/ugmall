@@ -3,6 +3,7 @@ import { and, count, eq, inArray, sql } from "drizzle-orm";
 import {
   couponRedemptions,
   coupons,
+  customerAddresses,
   customers,
   deliveries,
   deliveryZones,
@@ -139,7 +140,7 @@ export class OrderService {
     let couponError: string | null = null;
     if (input.couponCode) {
       try {
-        const r = await this.resolveCoupon(this.db, input.couponCode, subtotal, delivery.fee, input.phone ?? null);
+        const r = await this.resolveCoupon(this.db, input.couponCode, lines, delivery.fee, input.phone ?? null);
         discount = r.discount;
         coupon = r.coupon;
       } catch (err) {
@@ -151,13 +152,21 @@ export class OrderService {
     return { lines, subtotal, delivery, zone, location, discount, coupon, couponError, total, weightGrams: weight };
   }
 
-  private async resolveCoupon(db: DbOrTx, code: string, subtotal: number, deliveryFee: number, phone: string | null) {
+  private async resolveCoupon(db: DbOrTx, code: string, lines: Awaited<ReturnType<typeof priceLines>>, deliveryFee: number, phone: string | null) {
     const [coupon] = await db
       .select()
       .from(coupons)
       .where(sql`upper(${coupons.code}) = upper(${code.trim()})`);
     if (!coupon) throw new CouponError("Coupon code not found");
-    const discount = computeCouponDiscount(coupon, subtotal, deliveryFee);
+    if (coupon.customerId) {
+      if (!phone) throw new CouponError("Sign in or enter the phone number for this personal offer");
+      const [owner] = await db.select({ id: customers.id }).from(customers).where(and(eq(customers.id, coupon.customerId), eq(customers.phone, phone)));
+      if (!owner) throw new CouponError("This personal offer belongs to another buyer");
+    }
+    const eligibleLines = coupon.productIds.length ? lines.filter((line) => coupon.productIds.includes(line.productId)) : lines;
+    if (!eligibleLines.length) throw new CouponError("Add one of the products in your personal offer to use this code");
+    const eligibleSubtotal = eligibleLines.reduce((sum, line) => sum + line.lineTotal, 0);
+    const discount = computeCouponDiscount(coupon, eligibleSubtotal, deliveryFee);
     if (phone) {
       const [used] = await db
         .select({ n: count() })
@@ -244,6 +253,42 @@ export class OrderService {
         })
         .returning();
       if (customer!.isBlocked) throw new OrderError("We can't accept orders from this number. Please contact us on WhatsApp.");
+
+      // A signed-in buyer's delivery details belong to their durable account,
+      // not only to this browser's local storage. Avoid creating duplicates
+      // when the same address is used for later orders.
+      if (ctx.customerId) {
+        const district = q.location?.district ?? (input.district || "-");
+        const area = input.nearbyPlace || q.location?.area || input.area || "-";
+        const [savedAddress] = await tx
+          .select({ id: customerAddresses.id })
+          .from(customerAddresses)
+          .where(and(
+            eq(customerAddresses.customerId, customer!.id),
+            eq(customerAddresses.district, district),
+            eq(customerAddresses.area, area),
+            eq(customerAddresses.address, input.address),
+          ))
+          .limit(1);
+        if (!savedAddress) {
+          const addressRows = await tx
+            .select({ total: count() })
+            .from(customerAddresses)
+            .where(eq(customerAddresses.customerId, customer!.id));
+          const addressCount = addressRows[0]?.total ?? 0;
+          await tx.insert(customerAddresses).values({
+            customerId: customer!.id,
+            label: addressCount === 0 ? "Home" : `Address ${addressCount + 1}`,
+            district,
+            area,
+            address: input.address,
+            locationId: q.location?.location.id ?? input.locationId ?? null,
+            nearbyPlace: input.nearbyPlace || null,
+            deliveryZoneId: q.zone?.id ?? null,
+            isDefault: addressCount === 0,
+          });
+        }
+      }
 
       const [{ seq }] = (await tx.execute(sql`select nextval(${orderNumberSeq.seqName}) as seq`)) as unknown as [{ seq: string }];
       const orderNumber = formatOrderNumber(new Date().getFullYear(), Number(seq));

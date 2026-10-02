@@ -1,7 +1,8 @@
+import { randomBytes } from "node:crypto";
 import { Hono } from "hono";
 import { z } from "zod";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import { customerAddresses, customers, orderItems, orders, products, reviews, wishlistItems } from "@ugmall/database";
+import { and, count, desc, eq, gt, inArray, sql } from "drizzle-orm";
+import { coupons, customerAddresses, customerCampaigns, customers, orderItems, orders, products, reviews, wishlistItems } from "@ugmall/database";
 import { normalizeUgPhone, ORDER_STATUS_LABELS, reviewSchema, ugPhone } from "@ugmall/shared";
 import { ApiError, body, clearCookie, COOKIES, writeCookie, clientIp } from "../../lib/http";
 import { listProducts } from "../../lib/catalog";
@@ -103,25 +104,110 @@ accountRoutes.delete("/addresses/:id", async (c) => {
 
 accountRoutes.get("/orders", requireCustomer, async (c) => {
   const { db } = c.get("container");
-  const rows = await db
+  const customer = c.get("customer")!;
+  // Re-link any guest orders made with the same verified phone since sign-in.
+  await db.update(orders).set({ customerId: customer.id }).where(and(eq(orders.phone, customer.phone), sql`${orders.customerId} is distinct from ${customer.id}`));
+  const query = z.object({ limit:z.coerce.number().int().min(1).max(100).default(20), offset:z.coerce.number().int().min(0).default(0) }).parse(c.req.query());
+  const where = eq(orders.customerId, customer.id);
+  const [rows, totalRows, summaryRows] = await Promise.all([db
     .select()
     .from(orders)
-    .where(eq(orders.customerId, c.get("customer")!.id))
+    .where(where)
     .orderBy(desc(orders.createdAt))
-    .limit(100);
+    .limit(query.limit)
+    .offset(query.offset),
+  db.select({ total:count() }).from(orders).where(where),
+  db.select({
+    totalOrders:count(),
+    openOrders:sql<number>`count(*) filter (where ${orders.status} not in ('delivered','cancelled','returned','refunded'))::int`,
+    deliveredOrders:sql<number>`count(*) filter (where ${orders.status}='delivered')::int`,
+    totalSpent:sql<number>`coalesce(sum(case when ${orders.status} not in ('cancelled','refunded') then ${orders.total} else 0 end),0)::int`,
+  }).from(orders).where(where)]);
+  const total = totalRows[0]?.total ?? 0;
+  const summary = summaryRows[0];
   const items = rows.length ? await db.select().from(orderItems).where(inArray(orderItems.orderId, rows.map((r) => r.id))) : [];
-  return c.json(
-    rows.map((o) => ({
+  return c.json({
+    summary:{ totalOrders:summary?.totalOrders ?? 0, openOrders:summary?.openOrders ?? 0, deliveredOrders:summary?.deliveredOrders ?? 0, totalSpent:summary?.totalSpent ?? 0 },
+    pagination:{ total, limit:query.limit, offset:query.offset },
+    orders:rows.map((o) => ({
       orderNumber: o.orderNumber,
-      trackingToken: o.trackingToken,
       status: o.status,
       statusLabel: ORDER_STATUS_LABELS[o.status],
+      paymentStatus:o.paymentStatus,
+      paymentMethod:o.paymentMethod,
+      deliveryMethod:o.deliveryMethod,
       total: o.total,
+      amountPaid:o.amountPaid,
       createdAt: o.createdAt,
+      updatedAt:o.updatedAt,
       itemCount: items.filter((i) => i.orderId === o.id).reduce((s, i) => s + i.quantity, 0),
       firstImage: items.find((i) => i.orderId === o.id)?.imageUrl ?? null,
     })),
-  );
+  });
+});
+
+accountRoutes.get("/promotion", requireCustomer, async (c) => {
+  const { db } = c.get("container");
+  const customer = c.get("customer")!;
+  const now = new Date();
+  const [existingCampaign] = await db
+    .select({ campaign:customerCampaigns, coupon:coupons })
+    .from(customerCampaigns)
+    .innerJoin(coupons, eq(coupons.id, customerCampaigns.couponId))
+    .where(and(eq(customerCampaigns.customerId, customer.id), gt(customerCampaigns.endsAt, now)))
+    .orderBy(desc(customerCampaigns.createdAt))
+    .limit(1);
+  let campaign: typeof existingCampaign | null = existingCampaign ?? null;
+
+  if (!campaign) {
+    campaign = await db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`buyer-campaign:${customer.id}`}))`);
+      const [existing] = await tx
+        .select({ campaign:customerCampaigns, coupon:coupons })
+        .from(customerCampaigns)
+        .innerJoin(coupons, eq(coupons.id, customerCampaigns.couponId))
+        .where(and(eq(customerCampaigns.customerId, customer.id), gt(customerCampaigns.endsAt, now)))
+        .orderBy(desc(customerCampaigns.createdAt))
+        .limit(1);
+      if (existing) return existing;
+      await tx.update(coupons).set({ isActive:false }).where(eq(coupons.customerId, customer.id));
+      const picks = await tx
+        .select({ id:products.id })
+        .from(products)
+        .where(and(
+          eq(products.status, "active"),
+          sql`${products.price} between 20000 and 500000`,
+          sql`(${products.costPrice}=0 or ${products.price}-${products.costPrice} >= 10000)`,
+          sql`exists (select 1 from product_variants v join inventory_levels l on l.variant_id=v.id where v.product_id=${products.id} and v.is_active and greatest(l.on_hand-l.reserved,0)>0)`,
+        ))
+        .orderBy(products.price)
+        .limit(8);
+      if (!picks.length) return null;
+      const startsAt = new Date();
+      const endsAt = new Date(startsAt.getTime() + 24 * 60 * 60_000);
+      const productIds = picks.map((p) => p.id);
+      const code = `JUST4U-${customer.id.slice(0,4).toUpperCase()}-${randomBytes(2).toString("hex").toUpperCase()}`;
+      const [coupon] = await tx.insert(coupons).values({
+        code, customerId:customer.id, productIds, description:"Your private 24-hour UG Mall offer", type:"percent", value:3,
+        maxDiscount:5000, minOrderAmount:20000, maxUses:1, maxUsesPerCustomer:1, startsAt, endsAt,
+      }).returning();
+      const [created] = await tx.insert(customerCampaigns).values({ customerId:customer.id, couponId:coupon!.id, title:"A little something, just for you", productIds, startsAt, endsAt }).returning();
+      return { campaign:created!, coupon:coupon! };
+    });
+  }
+  if (!campaign) return c.json(null);
+  const catalogue = await listProducts(db, { productIds:campaign.campaign.productIds, inStock:true, sort:"price_asc", limit:8, offset:0 });
+  return c.json({
+    id:campaign.campaign.id,
+    title:campaign.campaign.title,
+    code:campaign.coupon.code,
+    percentOff:campaign.coupon.value,
+    maxDiscount:campaign.coupon.maxDiscount,
+    startsAt:campaign.campaign.startsAt,
+    endsAt:campaign.campaign.endsAt,
+    used:campaign.coupon.usedCount > 0,
+    products:catalogue.items,
+  });
 });
 
 /* -------------------------------------------------------------- wishlist */
