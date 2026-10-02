@@ -33,6 +33,8 @@ export interface ProductCard {
   isNew?: boolean;
   /** End of the product's own sale price, for a countdown. */
   saleEndsAt?: string | null;
+  /** This item is sourced after checkout rather than held for immediate dispatch. */
+  paymentOnOrder?: boolean;
 }
 
 export interface Variant {

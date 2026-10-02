@@ -22,6 +22,19 @@ describe("WhatsAppSupportHubProvider", () => {
     expect(payload).toMatchObject({ type: "buttons", body: "Approve this?" });
     expect(payload.buttons).toEqual(expect.arrayContaining([expect.objectContaining({ id: "ug:approve:1" }), expect.objectContaining({ id: "ug:reject:1" })]));
   });
+
+  it("asks the Hub to close a resolved conversation after the final reply", async () => {
+    const request = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) => new Response(JSON.stringify({ data: {} }), { status: 201 }));
+    const provider = new WhatsAppSupportHubProvider({ baseUrl: "https://hub.example", apiKey: "app-secret-key", fetch: request as typeof fetch });
+    await provider.sendText("256700000001", "Resolved", { idempotencyKey: "resolved-1", closeConversationId: "conversation-42" });
+    const payload = JSON.parse(String((request.mock.calls[0]![1] as RequestInit).body));
+    expect(payload).toMatchObject({
+      phoneNumber: "256700000001",
+      message: "Resolved",
+      conversationId: "conversation-42",
+      closeConversation: true,
+    });
+  });
 });
 
 describe("verifySupportHubSignature", () => {

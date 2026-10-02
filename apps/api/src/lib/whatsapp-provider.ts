@@ -2,6 +2,7 @@ import type { Database } from "@ugmall/database";
 import {
   createWhatsAppFromEnv,
   WhatsAppSupportHubProvider,
+  type SendOptions,
   type SendResult,
   type TemplateMessage,
   type WhatsAppProvider,
@@ -24,15 +25,15 @@ export class ConfiguredWhatsAppProvider implements WhatsAppProvider {
     return this.fallback;
   }
 
-  async sendText(to: string, body: string, opts?: { idempotencyKey?: string }): Promise<SendResult> {
+  async sendText(to: string, body: string, opts?: SendOptions): Promise<SendResult> {
     return (await this.provider()).sendText(to, body, opts);
   }
 
-  async sendTemplate(to: string, template: TemplateMessage, opts?: { idempotencyKey?: string }): Promise<SendResult> {
+  async sendTemplate(to: string, template: TemplateMessage, opts?: SendOptions): Promise<SendResult> {
     return (await this.provider()).sendTemplate(to, template, opts);
   }
 
-  async sendButtons(to: string, body: string, buttons: { id: string; title: string }[], opts?: { idempotencyKey?: string }): Promise<SendResult> {
+  async sendButtons(to: string, body: string, buttons: { id: string; title: string }[], opts?: SendOptions): Promise<SendResult> {
     const provider = await this.provider();
     if (provider.sendButtons) return provider.sendButtons(to, body, buttons, opts);
     return provider.sendText(to, `${body}\n\n${buttons.map((button) => `• ${button.title}`).join("\n")}`, opts);

@@ -11,11 +11,17 @@ export interface SendResult {
   messageId?: string;
 }
 
+export interface SendOptions {
+  idempotencyKey?: string;
+  /** Support Hub conversation to resolve after the final reply is accepted. */
+  closeConversationId?: string;
+}
+
 export interface WhatsAppProvider {
   readonly name: string;
-  sendText(toE164: string, body: string, opts?: { idempotencyKey?: string }): Promise<SendResult>;
-  sendTemplate(toE164: string, template: TemplateMessage, opts?: { idempotencyKey?: string }): Promise<SendResult>;
-  sendButtons?(toE164: string, body: string, buttons: { id: string; title: string }[], opts?: { idempotencyKey?: string }): Promise<SendResult>;
+  sendText(toE164: string, body: string, opts?: SendOptions): Promise<SendResult>;
+  sendTemplate(toE164: string, template: TemplateMessage, opts?: SendOptions): Promise<SendResult>;
+  sendButtons?(toE164: string, body: string, buttons: { id: string; title: string }[], opts?: SendOptions): Promise<SendResult>;
 }
 
 type HubResponse = { data?: { message?: { externalMessageId?: string; external_message_id?: string }; conversationId?: string }; error?: { message?: string } | string };
@@ -30,15 +36,19 @@ export class WhatsAppSupportHubProvider implements WhatsAppProvider {
 
   constructor(private opts: { baseUrl: string; apiKey: string; fetch?: typeof fetch }) {}
 
-  private async post(payload: Record<string, unknown>, idempotencyKey?: string): Promise<SendResult> {
+  private async post(payload: Record<string, unknown>, opts: SendOptions = {}): Promise<SendResult> {
     const res = await (this.opts.fetch ?? fetch)(`${this.opts.baseUrl.replace(/\/+$/, "")}/v1/integrations/messages/send`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "X-API-Key": this.opts.apiKey,
-        ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
+        ...(opts.idempotencyKey ? { "Idempotency-Key": opts.idempotencyKey } : {}),
       },
-      body: JSON.stringify({ reopenClosed: true, ...payload }),
+      body: JSON.stringify({
+        reopenClosed: true,
+        ...payload,
+        ...(opts.closeConversationId ? { conversationId: opts.closeConversationId, closeConversation: true } : {}),
+      }),
       signal: AbortSignal.timeout(20_000),
     });
     const json = (await res.json().catch(() => ({}))) as HubResponse;
@@ -49,16 +59,16 @@ export class WhatsAppSupportHubProvider implements WhatsAppProvider {
     return { messageId: json.data?.message?.externalMessageId ?? json.data?.message?.external_message_id };
   }
 
-  sendText(to: string, body: string, opts: { idempotencyKey?: string } = {}) {
-    return this.post({ phoneNumber: to, type: "text", message: body, previewUrl: true }, opts.idempotencyKey);
+  sendText(to: string, body: string, opts: SendOptions = {}) {
+    return this.post({ phoneNumber: to, type: "text", message: body, previewUrl: true }, opts);
   }
 
-  sendTemplate(to: string, t: TemplateMessage, opts: { idempotencyKey?: string } = {}) {
-    return this.post({ phoneNumber: to, type: "template", templateName: t.name, languageCode: t.language, variables: { body: t.bodyParams } }, opts.idempotencyKey);
+  sendTemplate(to: string, t: TemplateMessage, opts: SendOptions = {}) {
+    return this.post({ phoneNumber: to, type: "template", templateName: t.name, languageCode: t.language, variables: { body: t.bodyParams } }, opts);
   }
 
-  sendButtons(to: string, body: string, buttons: { id: string; title: string }[], opts: { idempotencyKey?: string } = {}) {
-    return this.post({ phoneNumber: to, type: "buttons", body, buttons }, opts.idempotencyKey);
+  sendButtons(to: string, body: string, buttons: { id: string; title: string }[], opts: SendOptions = {}) {
+    return this.post({ phoneNumber: to, type: "buttons", body, buttons }, opts);
   }
 }
 

@@ -80,6 +80,11 @@ export function ProductPurchase({ product: p, whatsappNumber }: { product: Produ
           {p.brand && <div className="text-sm text-gray-500">{p.brand}</div>}
           <h1 className="text-2xl font-bold leading-tight">{p.name}</h1>
           <div className="mt-1 text-xs text-gray-500">SKU: {variant?.sku ?? p.sku}</div>
+          {p.paymentOnOrder && (
+            <div className="mt-2 inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-extrabold uppercase tracking-wide text-amber-900">
+              Payment on order
+            </div>
+          )}
           <div className="mt-3">
             <Price price={price} compareAt={compareAt} size="lg" />
           </div>

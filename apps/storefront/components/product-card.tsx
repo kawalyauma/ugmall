@@ -92,6 +92,7 @@ export function ProductCard({ p }: { p: P }) {
               />
             )}
             <div className="absolute left-2 top-2 flex flex-col items-start gap-1">
+              {p.paymentOnOrder && <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-amber-950 shadow-sm">Payment on order</span>}
               {p.discountPercent > 0 && <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-bold text-white shadow-sm">-{p.discountPercent}%</span>}
               {p.isNew && <span className="rounded-full bg-brand-700 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white shadow-sm">New</span>}
             </div>

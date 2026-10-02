@@ -31,10 +31,12 @@ The administrator number must match the `phone` of an active UG Mall staff user.
 - New order: customer confirmation plus an operational summary to the administrator.
 - Failed payment/underpayment: customer recovery message plus an administrator alert.
 - Agent proposal: administrator receives the title, explanation and risk with **Approve** / **Reject** buttons.
-- Customer support: menu for orders, returns or human support.
+- Customer support: every inbound customer message is answered automatically. The menu covers live product discovery, stock and budget searches, orders, delivery, payments, shop details, returns and human support.
+- Shopping: natural-language requests such as `black shoes under 80k` are matched against the live catalogue and return current prices, stock signals and storefront links.
 - Order management: latest-order lookup, live status, balance and safe cancellation where the state machine permits it.
 - Returns: a delivered order can generate a return request. The administrator receives **Approve** / **Reject** buttons. Approval does not issue money or mark goods received; inspection and refund remain separate controlled steps.
-- Other issues: the customer receives an acknowledgement and the case is escalated to the Hub support console and administrator.
+- Conversation lifecycle: explicit completion (`thanks`, `done`, `bye`), a completed cancellation, or a submitted return sends a final reply with the Hub's `closeConversation` instruction. A later message is reopened by the Hub. Ambiguous, sensitive and human-requested cases stay open and are escalated with context.
+- Other issues: the customer receives an immediate acknowledgement or a guided retry, with a human-support option. Human requests are escalated to the Hub support console and administrator.
 
 All Hub webhook events are HMAC-verified from the exact raw body before being queued. Outbound workflow messages use Hub idempotency keys. Approval execution still uses the existing row locks, validation, audit log and before/after snapshots.
 

@@ -62,6 +62,7 @@ const COLUMNS = {
   barcode: ["GTIN_Barcode", "barcode", "Barcode", "GTIN"],
   colour: ["color", "colour", "Color", "Colour"],
   weight: ["product_weight", "weight", "Weight", "weight_kg"],
+  tags: ["tags", "Tags", "labels", "Labels"],
   images: ["MainImage", "Image2", "Image3", "Image4", "Image5", "Image6", "Image7", "Image8", "image", "Image", "image_url", "Image URL", "image1", "image2", "image3", "image4", "image5"],
 } as const;
 
@@ -304,7 +305,13 @@ export function buildImportPlan(sheet: Sheet): ImportPlan {
       salePrice,
       weightGrams: parseWeight(pick(r0, COLUMNS.weight)),
       colours: colourIsAxis ? [...colourValues].filter(Boolean) : splitList(colourText).slice(0, 10),
-      tags: [...new Set([r0.gender, category?.path.at(-1)].filter(Boolean).map((t) => t!.toLowerCase()))],
+      tags: [
+        ...new Set([
+          ...splitList(pick(r0, COLUMNS.tags)),
+          r0.gender,
+          category?.path.at(-1),
+        ].filter(Boolean).map((t) => t!.toLowerCase())),
+      ],
       attributes,
       images: images.slice(0, 8),
       optionNames,

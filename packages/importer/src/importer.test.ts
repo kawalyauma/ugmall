@@ -93,6 +93,15 @@ describe("Jumia-style variation rows", () => {
     expect(p.products[0]!.variants).toHaveLength(1);
     expect(p.products[0]!.optionNames).toEqual([]);
   });
+
+  it("imports explicit product labels as normalised tags", () => {
+    const input = [
+      ["SKU", "Name", "Price_UGX", "Tags", "Category"],
+      ["PHONE-1", "Phone", "500000", '"Payment-On-Order, Uganda Electronics"', "Electronics / Phones"],
+    ].map((row) => row.join(",")).join("\n");
+    const p = buildImportPlan(readSpreadsheet(strToU8(input), "products.csv"));
+    expect(p.products[0]!.tags).toEqual(["payment-on-order", "uganda electronics", "phones"]);
+  });
 });
 
 describe("spreadsheet reader", () => {

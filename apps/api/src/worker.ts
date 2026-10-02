@@ -11,7 +11,7 @@ import type { ImageJob } from "@ugmall/importer";
 import { AGENT_KEYS, buildAgentContext, contextHash, processAgentRun, PROMPT_VERSION, type AgentKey } from "./lib/agent-workforce";
 import { WhatsAppCareAgent } from "./lib/whatsapp-care-agent";
 import { ConfiguredWhatsAppProvider } from "./lib/whatsapp-provider";
-import { getWhatsAppRuntimeSettings } from "./lib/settings";
+import { getSettings, getWhatsAppRuntimeSettings } from "./lib/settings";
 
 /**
  * Background worker (separate process/container from the API):
@@ -31,7 +31,9 @@ const notifier = new NotificationService(db, whatsapp, {
 const adminNotifier = new AdminWhatsAppService(whatsapp);
 const careAgent = new WhatsAppCareAgent(db, orderService, storage, whatsapp, {
   getAdminPhone: async () => (await getWhatsAppRuntimeSettings(db, env.APP_SECRET, env)).adminNumber,
+  getShopSettings: async () => getSettings(db),
   adminUrl: env.ADMIN_URL,
+  storefrontUrl: env.STOREFRONT_URL,
   shopName: env.SHOP_NAME,
 });
 

@@ -200,6 +200,7 @@ export function productCard(
     /** When the product's own sale price ends, for a countdown on the card. */
     saleEndsAt: pr.discountPercent > 0 && p.salePrice !== null && p.saleEndsAt && isSaleActive(p) ? p.saleEndsAt : null,
     isFeatured: p.isFeatured,
+    paymentOnOrder: p.tags.includes("payment-on-order"),
   };
 }
 
@@ -281,6 +282,7 @@ export async function productDetail(db: Database, reservations: StockReservation
     sizes: row.p.sizes,
     colours: row.p.colours,
     tags: row.p.tags,
+    paymentOnOrder: row.p.tags.includes("payment-on-order"),
     attributes: row.p.attributes,
     weightGrams: row.p.weightGrams,
     category: row.category ? { id: row.category.id, name: row.category.name, slug: row.category.slug } : null,

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, Crown, Flame, MessageCircle, ShieldCheck, Shirt, Smartphone, Sparkles, Tag, Truck, Wallet, Zap } from "lucide-react";
-import { formatUGX, whatsappLink } from "@ugmall/shared";
+import { ArrowRight, Flame, MessageCircle, ShieldCheck, Shirt, Smartphone, Sparkles, Truck, Zap } from "lucide-react";
+import { whatsappLink } from "@ugmall/shared";
 import { serverGet } from "@/lib/api";
 import type { Category, ProductCard as Product, ShopSettings } from "@/lib/types";
 import { ProductCard, ProductGrid } from "@/components/product-card";
@@ -80,44 +80,6 @@ function CategoryCircles({ categories }: { categories: Category[] }) {
             <div className="mt-2 line-clamp-2 text-xs font-bold leading-4 text-gray-800">{c.name}</div>
           </Link>
         ))}
-      </div>
-    </section>
-  );
-}
-
-const PRICE_BANDS = [
-  { label: "Under", max: 20_000, icon: Tag, className: "from-emerald-500 to-teal-600" },
-  { label: "Under", max: 50_000, icon: Wallet, className: "from-sky-500 to-indigo-600" },
-  { label: "Under", max: 100_000, icon: Sparkles, className: "from-orange-500 to-rose-500" },
-  { label: "Premium", min: 100_000, icon: Crown, className: "from-gray-800 to-gray-950" },
-] as const;
-
-/** Quick entry points by budget; each opens the popular listing with a price filter. */
-function ShopByPrice() {
-  return (
-    <section className="container-page mt-10">
-      <div className="mb-3">
-        <div className="text-xs font-bold uppercase tracking-[0.16em] text-brand-700">Every budget</div>
-        <h2 className="mt-1 text-2xl font-black tracking-tight">Shop by price</h2>
-      </div>
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        {PRICE_BANDS.map((b) => {
-          const href = "max" in b ? `/search?max=${b.max}&sort=popular` : `/search?min=${b.min}&sort=popular`;
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={`group relative overflow-hidden rounded-2xl bg-gradient-to-br ${b.className} p-4 text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg`}
-            >
-              <b.icon className="absolute -right-3 -top-3 size-20 text-white/15 transition duration-300 group-hover:rotate-12 group-hover:scale-110" />
-              <div className="text-xs font-bold uppercase tracking-[0.14em] text-white/80">{b.label}</div>
-              <div className="mt-1 text-xl font-black md:text-2xl">{"max" in b ? formatUGX(b.max) : `${formatUGX(b.min)}+`}</div>
-              <div className="mt-3 inline-flex items-center gap-1 text-xs font-bold">
-                Shop now <ArrowRight className="size-3.5 transition group-hover:translate-x-0.5" />
-              </div>
-            </Link>
-          );
-        })}
       </div>
     </section>
   );
@@ -214,7 +176,6 @@ export default async function Home() {
       </section>
 
       <CategoryCircles categories={categories} />
-      <ShopByPrice />
       <ProductSection icon={Sparkles} eyebrow="Staff picks" title="Featured products" description="Products selected for value, availability and customer interest." href="/search?featured=1" items={featured.items} accent="bg-emerald-100 text-emerald-800" />
       <ProductSection icon={Flame} eyebrow="Best sellers" title="Popular right now" description="Products shoppers are buying most often." href="/search?sort=popular" items={trending.items} accent="bg-amber-100 text-amber-800" tint="bg-gradient-to-b from-amber-50 to-orange-50/40" />
       <ProductSection icon={Shirt} eyebrow="Just added" title="New arrivals" description="The newest products added to UG Mall." href="/search?sort=newest" items={newest.items} accent="bg-rose-100 text-rose-800" />

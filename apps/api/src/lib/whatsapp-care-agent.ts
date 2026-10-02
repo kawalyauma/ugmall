@@ -1,6 +1,7 @@
-import { and, desc, eq, inArray, or } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, or } from "drizzle-orm";
 import {
   agentActions,
+  deliveryZones,
   orderItems,
   orders,
   returns as returnRecords,
@@ -13,15 +14,43 @@ import type { StorageProvider } from "@ugmall/storage";
 import { canTransition, formatUGX, normalizeUgPhone, ORDER_STATUS_LABELS } from "@ugmall/shared";
 import { executeAgentAction } from "./agent-workforce";
 import { audit } from "./audit";
+import { listProducts } from "./catalog";
+import type { ShopSettings } from "./settings";
 
 const MENU_BUTTONS = [
+  { id: "ug:shop", title: "Find products" },
   { id: "ug:orders", title: "My orders" },
-  { id: "ug:returns", title: "Returns" },
-  { id: "ug:human", title: "Talk to support" },
+  { id: "ug:more", title: "More help" },
 ];
 
 const compact = (value: string | null | undefined) => String(value ?? "").trim();
 const customerCanCancel = (status: string) => status === "pending" || status === "awaiting_payment";
+
+function moneyFrom(text: string) {
+  const match = text.match(/(?:ugx|ush|shs?)?\s*([\d,.]+)\s*(k)?\b/i);
+  if (!match) return undefined;
+  const raw = Number(match[1]!.replace(/[,.]/g, ""));
+  if (!Number.isFinite(raw) || raw <= 0) return undefined;
+  return Math.round(raw * (match[2] ? 1000 : 1));
+}
+
+/** Pull a shopper's upper budget from common Ugandan chat phrasing. */
+export function parseShoppingBudget(text: string) {
+  const match = text.match(/(?:under|below|less than|not more than|max(?:imum)?|budget(?:\s+of)?|for)\s+(?:ugx|ush|shs?)?\s*[\d,.]+\s*k?\b/i);
+  return match ? moneyFrom(match[0]) : undefined;
+}
+
+/** Remove chat filler and budget language, leaving terms suitable for catalogue search. */
+export function productSearchTerms(text: string) {
+  return text
+    .toLowerCase()
+    .replace(/(?:under|below|less than|not more than|max(?:imum)?|budget(?:\s+of)?|for)\s+(?:ugx|ush|shs?)?\s*[\d,.]+\s*k?\b/gi, " ")
+    .replace(/\b(?:please|kindly|i\s+(?:want|need|am looking for)|show me|find me|find|show|buy|purchase|order|do you have|is there|available|in stock|products?|something)\b/gi, " ")
+    .replace(/[^a-z0-9 -]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 100);
+}
 
 /**
  * Deterministic WhatsApp customer-care agent. It may expose customer-owned
@@ -34,7 +63,13 @@ export class WhatsAppCareAgent {
     private ordersService: OrderService,
     private storage: StorageProvider,
     private whatsapp: WhatsAppProvider,
-    private opts: { getAdminPhone: () => Promise<string | undefined>; adminUrl: string; shopName: string },
+    private opts: {
+      getAdminPhone: () => Promise<string | undefined>;
+      getShopSettings: () => Promise<ShopSettings>;
+      adminUrl: string;
+      storefrontUrl: string;
+      shopName: string;
+    },
   ) {}
 
   async handle(event: SupportHubWebhookEvent) {
@@ -57,24 +92,43 @@ export class WhatsAppCareAgent {
 
     if (interactiveId === "ug:orders") return this.showOrders(phone, messageKey);
     if (interactiveId === "ug:returns") return this.showReturnOptions(phone, messageKey);
+    if (interactiveId === "ug:shop") return this.askWhatToShop(phone, messageKey);
+    if (interactiveId === "ug:more") return this.moreMenu(phone, messageKey);
+    if (interactiveId === "ug:delivery") return this.deliveryHelp(phone, "", messageKey);
+    if (interactiveId === "ug:policy") return this.policyHelp(phone, messageKey);
     if (interactiveId === "ug:human") return this.escalate(phone, event, "Customer requested a human agent", messageKey);
     if (interactiveId.startsWith("ug:track:")) return this.showOneOrder(phone, interactiveId.slice(9), messageKey);
-    if (interactiveId.startsWith("ug:cancel:")) return this.cancelOrder(phone, interactiveId.slice(10), messageKey);
-    if (interactiveId.startsWith("ug:return:")) return this.requestReturn(phone, interactiveId.slice(10), messageKey);
+    if (interactiveId.startsWith("ug:cancel:")) return this.cancelOrder(phone, interactiveId.slice(10), messageKey, event.conversation.id);
+    if (interactiveId.startsWith("ug:return:")) return this.requestReturn(phone, interactiveId.slice(10), messageKey, event.conversation.id);
 
     const text = compact(event.message?.content);
     const lower = text.toLowerCase();
     const orderNumber = text.match(/UG-\d{4}-\d+/i)?.[0]?.toUpperCase();
     if (orderNumber) return this.showOneOrder(phone, orderNumber, messageKey);
     if (/\b(track|status|where.*order|my order|orders)\b/i.test(lower)) return this.showOrders(phone, messageKey);
+    if (/\b(return policy|returns policy|opening|open|hours|address|shop location|contact|email)\b/i.test(lower)) return this.policyHelp(phone, messageKey);
     if (/\b(return|exchange|refund)\b/i.test(lower)) return this.showReturnOptions(phone, messageKey);
     if (/\b(cancel|stop order)\b/i.test(lower)) return this.showCancelableOrder(phone, messageKey);
+    if (/\b(deliver|delivery|shipping|ship|fee|reach|location|area)\b/i.test(lower)) return this.deliveryHelp(phone, text, messageKey);
+    if (/\b(pay|payment|mobile money|momo|airtel|cash on delivery|cod|card)\b/i.test(lower)) return this.paymentHelp(phone, messageKey);
+    if (/\b(human|person|agent|customer care|representative|complain|complaint)\b/i.test(lower)) return this.escalate(phone, event, text, messageKey);
+    if (/^(thanks|thank you|thx|okay thanks|ok thanks|done|that'?s all|bye)[.! ]*$/i.test(lower)) {
+      return this.finish(phone, event.conversation.id, `You’re welcome 👋 Thanks for choosing ${this.opts.shopName}.`, messageKey);
+    }
     if (/^(hi|hello|hey|menu|help)\b/i.test(lower)) return this.menu(phone, messageKey);
+    if (/\b(want|need|looking for|show|find|buy|price|cost|available|in stock|have)\b/i.test(lower) || lower.length >= 2) {
+      const handled = await this.shop(phone, text, messageKey);
+      if (handled) return;
+    }
     return this.escalate(phone, event, text || "Customer sent a non-text support request", messageKey);
   }
 
   private sendText(phone: string, body: string, key: string) {
     return this.whatsapp.sendText(phone, body, { idempotencyKey: `ugmall:care:${key}` });
+  }
+
+  private finish(phone: string, conversationId: string, body: string, key: string) {
+    return this.whatsapp.sendText(phone, body, { idempotencyKey: `ugmall:care:${key}`, closeConversationId: conversationId });
   }
 
   private async sendButtons(phone: string, body: string, buttons: { id: string; title: string }[], key: string) {
@@ -83,7 +137,65 @@ export class WhatsAppCareAgent {
   }
 
   private menu(phone: string, key: string) {
-    return this.sendButtons(phone, `Hello 👋 I’m the ${this.opts.shopName} customer-care assistant. I can track and manage orders, start a return, or connect you to support.`, MENU_BUTTONS, key);
+    return this.sendButtons(phone, `Hello 👋 I’m the ${this.opts.shopName} WhatsApp assistant. I reply automatically and can help you shop, check stock and prices, track or cancel orders, explain delivery and payments, start returns, or bring in a person.`, MENU_BUTTONS, key);
+  }
+
+  private askWhatToShop(phone: string, key: string) {
+    return this.sendText(phone, "Tell me what you’re looking for and your budget if you have one—for example: “black shoes under 80k” or “iPhone charger”.", key);
+  }
+
+  private moreMenu(phone: string, key: string) {
+    return this.sendButtons(phone, "What can I help with?", [
+      { id: "ug:delivery", title: "Delivery & payment" },
+      { id: "ug:returns", title: "Returns" },
+      { id: "ug:human", title: "Talk to a person" },
+    ], key);
+  }
+
+  private async shop(phone: string, text: string, key: string) {
+    const q = productSearchTerms(text);
+    const budget = parseShoppingBudget(text);
+    if (!q && !budget) return false;
+    const found = await listProducts(this.db, { q: q || undefined, maxPrice: budget, inStock: true, sort: "popular", limit: 5, offset: 0 });
+    if (!found.items.length) {
+      await this.sendButtons(phone, `I couldn’t find an in-stock match${q ? ` for “${q}”` : ""}${budget ? ` within ${formatUGX(budget)}` : ""}. Try a broader name or let our team help.`, [
+        { id: "ug:shop", title: "Search again" },
+        { id: "ug:human", title: "Talk to support" },
+      ], key);
+      return true;
+    }
+    const root = this.opts.storefrontUrl.replace(/\/$/, "");
+    const lines = found.items.map((p, index) => `${index + 1}. *${p.name}* — ${formatUGX(p.price)}${p.stockLeft ? ` · only ${p.stockLeft} left` : ""}\n${root}/p/${p.slug}`);
+    await this.sendText(phone, `Here are the best live matches${budget ? ` within ${formatUGX(budget)}` : ""}:\n\n${lines.join("\n\n")}\n\nOpen any link to choose options and order. You can also tell me a colour, size, or different budget.`, key);
+    return true;
+  }
+
+  private async deliveryHelp(phone: string, text: string, key: string) {
+    const zones = await this.db.select().from(deliveryZones).where(eq(deliveryZones.isActive, true)).orderBy(asc(deliveryZones.sortOrder), asc(deliveryZones.name));
+    const words = compact(text).toLowerCase().split(/\W+/).filter((word) => word.length > 2);
+    const relevant = words.length ? zones.filter((zone) => words.some((word) => `${zone.name} ${zone.district ?? ""}`.toLowerCase().includes(word))) : [];
+    const shown = (relevant.length ? relevant : zones).slice(0, relevant.length ? 5 : 8);
+    if (!shown.length) return this.sendText(phone, "Delivery pricing is confirmed during checkout. Send your district and area and I’ll help confirm coverage.", key);
+    const rows = shown.map((zone) => `• *${zone.name}*${zone.district ? ` (${zone.district})` : ""}: ${zone.isCalculated ? `from ${formatUGX(zone.baseFee)}` : formatUGX(zone.fee)}${zone.etaText ? ` · ${zone.etaText}` : ""}`);
+    return this.sendText(phone, `${relevant.length ? "I found these matching delivery options" : "Current delivery options"}:\n${rows.join("\n")}\n\nFinal cost depends on the exact area and basket. Reply with your district and area for a closer match.`, key);
+  }
+
+  private async paymentHelp(phone: string, key: string) {
+    const rows = await this.customerOrders(phone);
+    const latest = rows[0];
+    if (latest && latest.paymentStatus !== "succeeded") {
+      const balance = Math.max(0, latest.total - latest.amountPaid);
+      return this.sendButtons(phone, `For *${latest.orderNumber}*, payment is *${latest.paymentStatus.replaceAll("_", " ")}*.${balance ? ` Balance: ${formatUGX(balance)}.` : ""}\n\nWe accept MTN MoMo, Airtel Money, card, and eligible pay-on-delivery/pickup options shown at checkout.`, [
+        { id: `ug:track:${latest.id}`, title: "Order details" },
+        { id: "ug:human", title: "Payment support" },
+      ], key);
+    }
+    return this.sendText(phone, "We accept MTN MoMo, Airtel Money, card, and eligible cash-on-delivery or pay-on-pickup options. The secure checkout shows what is available for your basket and delivery area.", key);
+  }
+
+  private async policyHelp(phone: string, key: string) {
+    const settings = await this.opts.getShopSettings();
+    return this.sendText(phone, `*Returns:* ${settings.returnPolicy}\n*Support hours:* ${settings.businessHours}\n*Shop/pickup:* ${settings.pickupAddress} · ${settings.pickupHours}\n*Phone:* ${settings.supportPhone}\n*Email:* ${settings.supportEmail}`, key);
   }
 
   private async customerOrders(phone: string) {
@@ -127,12 +239,12 @@ export class WhatsAppCareAgent {
     return this.sendButtons(phone, `Cancel *${order.orderNumber}*? This cannot be undone.`, [{ id: `ug:cancel:${order.id}`, title: "Cancel order" }, { id: "ug:human", title: "Keep & get help" }], key);
   }
 
-  private async cancelOrder(phone: string, orderId: string, key: string) {
+  private async cancelOrder(phone: string, orderId: string, key: string, conversationId: string) {
     const [order] = await this.db.select().from(orders).where(and(eq(orders.id, orderId), or(eq(orders.phone, phone), eq(orders.altPhone, phone))));
     if (!order) return this.sendText(phone, "That order was not found on this WhatsApp number.", key);
     if (!customerCanCancel(order.status) || !canTransition(order.status, "cancelled")) return this.sendText(phone, `Order ${order.orderNumber} can no longer be cancelled automatically. I’ve left it unchanged; please ask for support.`, key);
     await this.ordersService.transition(order.id, "cancelled", { type: "customer", id: order.customerId ?? undefined }, "Cancelled by customer through WhatsApp");
-    return this.sendText(phone, `Order *${order.orderNumber}* has been cancelled. If you already paid, our team will review the refund.`, key);
+    return this.finish(phone, conversationId, `Order *${order.orderNumber}* has been cancelled. If you already paid, our team will review the refund. This conversation is now resolved; message us again any time.`, key);
   }
 
   private async showReturnOptions(phone: string, key: string) {
@@ -142,7 +254,7 @@ export class WhatsAppCareAgent {
     return this.sendButtons(phone, `Start a return request for *${delivered.orderNumber}*? Our team will review it before anything is refunded.`, [{ id: `ug:return:${delivered.id}`, title: "Request return" }, { id: "ug:human", title: "Ask a question" }], key);
   }
 
-  private async requestReturn(phone: string, orderId: string, key: string) {
+  private async requestReturn(phone: string, orderId: string, key: string, conversationId: string) {
     const [order] = await this.db.select().from(orders).where(and(eq(orders.id, orderId), or(eq(orders.phone, phone), eq(orders.altPhone, phone))));
     if (!order || order.status !== "delivered") return this.sendText(phone, "That order is not eligible for an automatic return request. No changes were made.", key);
     const existing = await this.db.select().from(returnRecords).where(and(eq(returnRecords.orderId, order.id), inArray(returnRecords.status, ["requested", "approved", "received"])));
@@ -151,7 +263,7 @@ export class WhatsAppCareAgent {
     const eligible = items.filter((item) => item.quantity > item.returnedQuantity).map((item) => ({ orderItemId: item.id, quantity: item.quantity - item.returnedQuantity, condition: "resellable" as const }));
     if (!eligible.length) return this.sendText(phone, "There are no remaining items eligible for return on that order.", key);
     const ret = await this.ordersService.createReturn(order.id, { reason: "Customer requested a return through WhatsApp; item condition requires inspection", items: eligible });
-    await this.sendText(phone, `Return request received for *${order.orderNumber}*. Reference: ${ret.id.slice(0, 8)}. Our team will review it; no refund has been issued yet.`, key);
+    await this.finish(phone, conversationId, `Return request received for *${order.orderNumber}*. Reference: ${ret.id.slice(0, 8)}. Our team will review it; no refund has been issued yet. This request is resolved for now and will reopen if you message us.`, key);
     const adminPhone = await this.opts.getAdminPhone();
     if (adminPhone) {
       await this.sendButtons(adminPhone, `↩️ Return approval needed\nOrder: *${order.orderNumber}*\nCustomer: ${order.customerName}\nReason: WhatsApp return request\n${this.opts.adminUrl.replace(/\/$/, "")}/returns`, [
