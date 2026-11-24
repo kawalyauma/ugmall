@@ -37,6 +37,7 @@ export function createContainer(env: Env = loadEnv()): Container {
     shopName: env.SHOP_NAME,
     storefrontUrl: env.STOREFRONT_URL,
     adminUrl: env.ADMIN_URL,
+    emailEnabled: Boolean(env.RESEND_API_KEY && env.RESEND_FROM_EMAIL),
     adminPhone: async () => (await getWhatsAppRuntimeSettings(db, env.APP_SECRET, env)).adminNumber,
   }), {
     paymentTimeoutMinutes: env.PAYMENT_TIMEOUT_MINUTES,

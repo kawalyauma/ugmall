@@ -892,6 +892,26 @@ export const settings = pgTable("settings", {
   updatedAt: updatedAt(),
 });
 
+/** Durable bridge from committed commerce events into Ledgerly accounting. */
+export const accountingOutbox = pgTable(
+  "accounting_outbox",
+  {
+    id: id(),
+    eventType: text("event_type").notNull(), // sale | refund
+    entityId: uuid("entity_id").notNull(),
+    status: text("status").notNull().default("pending"), // pending | processing | completed | failed
+    attempts: integer("attempts").notNull().default(0),
+    availableAt: timestamp("available_at", { withTimezone: true }).notNull().defaultNow(),
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
+    ledgerlyJournalId: text("ledgerly_journal_id"),
+    lastError: text("last_error"),
+    createdAt: createdAt(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex("accounting_outbox_event_entity_uq").on(t.eventType, t.entityId), index("accounting_outbox_pending_idx").on(t.status, t.availableAt, t.createdAt)],
+);
+
 export const notificationLog = pgTable(
   "notification_log",
   {

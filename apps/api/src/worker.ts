@@ -2,7 +2,7 @@ import { Worker, type Job } from "bullmq";
 import { z } from "zod";
 import { and, eq, gt, inArray, lt, sql } from "drizzle-orm";
 import { agentActions, agentRuns, orders, payments } from "@ugmall/database";
-import { AdminWhatsAppService, NotificationService, type AdminWhatsAppJob, type NotificationJob, type WhatsAppCareJob } from "@ugmall/notifications";
+import { AdminWhatsAppService, NotificationService, ResendEmailNotificationService, type AdminWhatsAppJob, type EmailNotificationJob, type NotificationJob, type WhatsAppCareJob } from "@ugmall/notifications";
 import { createContainer } from "./container";
 import { logger } from "./lib/logger";
 import { QUEUE_NAMES } from "./queues";
@@ -12,6 +12,7 @@ import { AGENT_KEYS, buildAgentContext, contextHash, processAgentRun, PROMPT_VER
 import { WhatsAppCareAgent } from "./lib/whatsapp-care-agent";
 import { ConfiguredWhatsAppProvider } from "./lib/whatsapp-provider";
 import { getSettings, getWhatsAppRuntimeSettings } from "./lib/settings";
+import { processLedgerlyOutbox } from "./lib/ledgerly-accounting";
 
 /**
  * Background worker (separate process/container from the API):
@@ -28,6 +29,7 @@ const notifier = new NotificationService(db, whatsapp, {
   useTemplates: async () => (await getWhatsAppRuntimeSettings(db, env.APP_SECRET, env)).useTemplates,
   templateLanguage: async () => (await getWhatsAppRuntimeSettings(db, env.APP_SECRET, env)).templateLanguage,
 });
+const emailNotifier = new ResendEmailNotificationService(db, { apiKey: env.RESEND_API_KEY, from: env.RESEND_FROM_EMAIL });
 const adminNotifier = new AdminWhatsAppService(whatsapp);
 const careAgent = new WhatsAppCareAgent(db, orderService, storage, whatsapp, {
   getAdminPhone: async () => (await getWhatsAppRuntimeSettings(db, env.APP_SECRET, env)).adminNumber,
@@ -99,11 +101,22 @@ async function enqueueApprovalAlerts(runId?: string) {
 const POLL_DELAYS = [15, 30, 60, 120, 180, 300, 300, 300, 300, 300].map((s) => s * 1000);
 
 const workers = [
-  new Worker<NotificationJob | AdminWhatsAppJob>(
+  new Worker<NotificationJob | AdminWhatsAppJob | EmailNotificationJob>(
     QUEUE_NAMES.notifications,
     async (job) => {
       if (job.data.kind === "admin") {
         await adminNotifier.send(job.data);
+        return;
+      }
+      if (job.data.kind === "email") {
+        try {
+          const logId = await emailNotifier.send(job.data, job.data.logId);
+          if (!job.data.logId) await job.updateData({ ...job.data, logId });
+        } catch (error) {
+          const logId = (error as Error & { logId?: string }).logId;
+          if (logId && !job.data.logId) await job.updateData({ ...job.data, logId });
+          throw error;
+        }
         return;
       }
       const logId = await notifier.send(job.data, job.data.logId);
@@ -168,6 +181,10 @@ const workers = [
         }
         if (removed) logger.info(`removed ${removed} temp files`);
       }
+      if (job.name === "ledgerly-accounting-outbox") {
+        const count = await processLedgerlyOutbox(db, env);
+        if (count) logger.info({ count }, "processed Ledgerly accounting outbox batch");
+      }
       if (job.name === "autonomous-agent") {
         const agentKey = z.enum(AGENT_KEYS).parse((job.data as { agentKey?: string }).agentKey);
         await enqueueAutonomousRun(agentKey);
@@ -184,6 +201,7 @@ for (const w of workers) {
 
 await queues.maintenance.upsertJobScheduler("sweep-unpaid", { every: 5 * 60_000 }, { name: "sweep-unpaid" });
 await queues.maintenance.upsertJobScheduler("clean-temp", { every: 6 * 3600_000 }, { name: "clean-temp" });
+await queues.maintenance.upsertJobScheduler("ledgerly-accounting-outbox", { every: 10_000 }, { name: "ledgerly-accounting-outbox" });
 for (const agentKey of AGENT_KEYS) {
   await queues.maintenance.upsertJobScheduler(`autonomy-${agentKey}`, { every: AUTONOMY_INTERVALS[agentKey] }, { name: "autonomous-agent", data: { agentKey } });
   await enqueueAutonomousRun(agentKey).catch((error) => logger.warn({ agentKey, error }, "unable to enqueue autonomous agent"));
