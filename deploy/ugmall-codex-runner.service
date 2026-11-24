@@ -1,0 +1,20 @@
+[Unit]
+Description=UG Mall host Codex runner
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/shop/app
+Environment=NODE_ENV=production
+Environment=CODEX_RUNNER_SOCKET=/opt/shop/agent-runtime/codex.sock
+ExecStart=/usr/bin/node /opt/shop/app/scripts/codex-agent-runner.mjs
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
