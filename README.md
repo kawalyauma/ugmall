@@ -15,6 +15,9 @@ images, invoices and receipts all live on your machine. No cloud object storage.
 See [docs/architecture.md](docs/architecture.md) for module boundaries, the stock
 model, order lifecycle and payment flow.
 
+Ledgerly accounting, Resend transactional email and WhatsApp setup are documented
+in [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
+
 ```
 ugmall/
 ├── apps/

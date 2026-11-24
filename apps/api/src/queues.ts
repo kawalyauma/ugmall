@@ -1,7 +1,7 @@
 import { Queue, type ConnectionOptions } from "bullmq";
 import { eq } from "drizzle-orm";
 import { orderItems, orders, staffUsers, type Database } from "@ugmall/database";
-import type { AdminWhatsAppJob, NotificationEvent, NotificationJob, WhatsAppCareJob } from "@ugmall/notifications";
+import type { AdminWhatsAppJob, EmailNotificationJob, NotificationEvent, NotificationJob, WhatsAppCareJob } from "@ugmall/notifications";
 import type { OrderEffects } from "@ugmall/orders";
 import type { ImageJob } from "@ugmall/importer";
 import { prettyUgPhone } from "@ugmall/shared";
@@ -14,12 +14,13 @@ export const QUEUE_NAMES = {
   imports: "imports",
   agents: "agent-workforce",
   whatsappCare: "whatsapp-care",
+  accountingOutbox: "accounting-outbox",
 } as const;
 
 export function createQueues(connection: ConnectionOptions) {
   const defaultJobOptions = { removeOnComplete: 1000, removeOnFail: 5000 };
   return {
-    notifications: new Queue<NotificationJob | AdminWhatsAppJob>(QUEUE_NAMES.notifications, {
+    notifications: new Queue<NotificationJob | AdminWhatsAppJob | EmailNotificationJob>(QUEUE_NAMES.notifications, {
       connection,
       defaultJobOptions: { ...defaultJobOptions, attempts: 6, backoff: { type: "exponential", delay: 30_000 } },
     }),
@@ -46,7 +47,7 @@ export type Queues = ReturnType<typeof createQueues>;
 export async function enqueueOrderNotification(
   db: Database,
   queues: Queues,
-  cfg: { shopName: string; storefrontUrl: string; adminUrl?: string; adminPhone?: string | (() => Promise<string | undefined>) },
+  cfg: { shopName: string; storefrontUrl: string; adminUrl?: string; adminPhone?: string | (() => Promise<string | undefined>); emailEnabled?: boolean },
   event: NotificationEvent,
   orderId: string,
   extra: Record<string, unknown> = {},
@@ -80,6 +81,13 @@ export async function enqueueOrderNotification(
   };
   await queues.notifications.add(event, job, { jobId: `${event}-${orderId}-${extra.amount ?? ""}-${event === "payment_failed" ? Date.now() : ""}` });
 
+  // Email is optional and only sent to customers who supplied an email address.
+  // Its provider is configured on the worker, so local/dev environments stay inert.
+  if (order.email && cfg.emailEnabled) {
+    const emailJob: EmailNotificationJob = { kind: "email", event, to: order.email, orderId, context: job.context };
+    await queues.notifications.add(`email-${event}`, emailJob, { jobId: `email-${event}-${orderId}-${String(extra.amount ?? "")}` });
+  }
+
   const adminPhone = typeof cfg.adminPhone === "function" ? await cfg.adminPhone() : cfg.adminPhone;
   if (adminPhone && ["order_received", "payment_failed", "cancelled"].includes(event)) {
     const failed = event === "payment_failed" || (event === "cancelled" && String(extra.reason ?? "").toLowerCase().includes("payment"));
@@ -104,7 +112,7 @@ export async function enqueueOrderNotification(
   }
 }
 
-export function createOrderEffects(db: Database, queues: Queues, cfg: { shopName: string; storefrontUrl: string; adminUrl?: string; adminPhone?: string | (() => Promise<string | undefined>) }): OrderEffects {
+export function createOrderEffects(db: Database, queues: Queues, cfg: { shopName: string; storefrontUrl: string; adminUrl?: string; adminPhone?: string | (() => Promise<string | undefined>); emailEnabled?: boolean }): OrderEffects {
   return {
     notify: (event, orderId, extra) => enqueueOrderNotification(db, queues, cfg, event, orderId, extra).catch((e) => console.error("notify failed", e)),
     schedulePaymentCheck: async (paymentId, delayMs) => {

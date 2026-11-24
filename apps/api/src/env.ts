@@ -36,6 +36,19 @@ const schema = z.object({
   WHATSAPP_ADMIN_NUMBER: z.string().regex(/^256\d{9}$/).optional(),
   WHATSAPP_USE_TEMPLATES: bool,
   WHATSAPP_TEMPLATE_LANGUAGE: z.string().default("en"),
+  /** Transactional email via Resend; disabled when either setting is absent. */
+  RESEND_API_KEY: z.string().min(16).optional().or(z.literal("")),
+  RESEND_FROM_EMAIL: z.string().email().optional().or(z.literal("")),
+  /** Ledgerly finance API; the API key must be scoped to journals:write. */
+  LEDGERLY_API_BASE_URL: z.string().url().optional().or(z.literal("")),
+  LEDGERLY_API_KEY: z.string().min(16).optional().or(z.literal("")),
+  LEDGERLY_CLEARING_ACCOUNT_ID: z.string().min(1).optional().or(z.literal("")),
+  LEDGERLY_SALES_REVENUE_ACCOUNT_ID: z.string().min(1).optional().or(z.literal("")),
+  LEDGERLY_DELIVERY_REVENUE_ACCOUNT_ID: z.string().min(1).optional().or(z.literal("")),
+  LEDGERLY_SALES_DISCOUNTS_ACCOUNT_ID: z.string().min(1).optional().or(z.literal("")),
+  LEDGERLY_COGS_ACCOUNT_ID: z.string().min(1).optional().or(z.literal("")),
+  LEDGERLY_INVENTORY_ACCOUNT_ID: z.string().min(1).optional().or(z.literal("")),
+  LEDGERLY_RETURNS_ACCOUNT_ID: z.string().min(1).optional().or(z.literal("")),
   COOKIE_DOMAIN: z.string().optional(),
   TRUST_PROXY: bool,
   LOG_LEVEL: z.string().default("info"),
@@ -54,6 +67,13 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
     for (const k of ["APP_SECRET", "PAYMENT_CALLBACK_SECRET"] as const) {
       if (env[k].startsWith("dev-")) throw new Error(`${k} must be set to a strong random value in production`);
     }
+  }
+  if (Boolean(env.RESEND_API_KEY) !== Boolean(env.RESEND_FROM_EMAIL)) {
+    throw new Error("RESEND_API_KEY and RESEND_FROM_EMAIL must be configured together");
+  }
+  const ledgerlyKeys = ["LEDGERLY_API_BASE_URL", "LEDGERLY_API_KEY", "LEDGERLY_CLEARING_ACCOUNT_ID", "LEDGERLY_SALES_REVENUE_ACCOUNT_ID", "LEDGERLY_DELIVERY_REVENUE_ACCOUNT_ID", "LEDGERLY_SALES_DISCOUNTS_ACCOUNT_ID", "LEDGERLY_COGS_ACCOUNT_ID", "LEDGERLY_INVENTORY_ACCOUNT_ID", "LEDGERLY_RETURNS_ACCOUNT_ID"] as const;
+  if (ledgerlyKeys.some((key) => Boolean(env[key])) && ledgerlyKeys.some((key) => !env[key])) {
+    throw new Error(`Ledgerly accounting requires all settings: ${ledgerlyKeys.join(", ")}`);
   }
   return env;
 }
